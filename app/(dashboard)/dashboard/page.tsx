@@ -86,15 +86,17 @@ export default function DashboardPage() {
             </div>
           </Link>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200 opacity-60 cursor-not-allowed">
-            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-              <FileText className="w-6 h-6 text-gray-400" />
+          <Link href="/drafts" className="block">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all">
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                <FileText className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">My Drafts</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                View and edit your drafts
+              </p>
             </div>
-            <h3 className="font-semibold text-gray-900">My Drafts</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              View and edit your drafts
-            </p>
-          </div>
+          </Link>
 
           <div className="bg-white p-6 rounded-xl border border-gray-200 opacity-60 cursor-not-allowed">
             <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mb-4">

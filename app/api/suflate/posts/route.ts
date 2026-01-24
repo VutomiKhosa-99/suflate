@@ -1,7 +1,134 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { randomUUID } from 'crypto'
+
+/**
+ * POST /api/suflate/posts
+ * Story 3.9: Create Draft Manually
+ * 
+ * Creates a new blank draft post without going through voice recording
+ * - Creates post with source_type='manual'
+ * - Sets default variation_type='professional'
+ * - Returns the created post for redirect to editor
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const { user, error: authError } = await getAuthUser(request)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const supabase = await createClient()
+    
+    // Parse optional body for initial content
+    let initialContent = ''
+    let initialTitle = ''
+    let variationType = 'professional'
+    
+    try {
+      const body = await request.json()
+      initialContent = body.content || ''
+      initialTitle = body.title || ''
+      variationType = body.variationType || 'professional'
+    } catch {
+      // No body provided, use defaults
+    }
+
+    // Validate variation type
+    const validVariationTypes = ['professional', 'personal', 'actionable', 'discussion', 'bold']
+    if (!validVariationTypes.includes(variationType)) {
+      variationType = 'professional'
+    }
+
+    // Get user's workspace
+    let workspaceId: string | null = null
+    
+    // First try workspace_members
+    const { data: membership } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single()
+
+    if (membership) {
+      workspaceId = membership.workspace_id
+    } else {
+      // Fallback to owned workspace
+      const { data: ownedWorkspace } = await supabase
+        .from('workspaces')
+        .select('id')
+        .eq('owner_id', user.id)
+        .limit(1)
+        .single()
+
+      if (ownedWorkspace) {
+        workspaceId = ownedWorkspace.id
+        
+        // Create missing workspace_members record
+        await supabase
+          .from('workspace_members')
+          .insert({
+            workspace_id: ownedWorkspace.id,
+            user_id: user.id,
+            role: 'owner',
+          })
+      }
+    }
+
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: 'No workspace found. Please set up your workspace first.' },
+        { status: 400 }
+      )
+    }
+
+    // Create the manual draft post
+    // Note: Manual drafts don't have transcription_id since they're not from voice
+    const postId = randomUUID()
+    
+    const { data: post, error: createError } = await supabase
+      .from('posts')
+      .insert({
+        id: postId,
+        workspace_id: workspaceId,
+        user_id: user.id,
+        source_type: 'manual',
+        variation_type: variationType,
+        content: initialContent,
+        title: initialTitle,
+        tags: [],
+        status: 'draft',
+        word_count: initialContent.trim().split(/\s+/).filter(Boolean).length,
+        character_count: initialContent.length,
+      })
+      .select()
+      .single()
+
+    if (createError) {
+      console.error('Error creating manual draft:', createError)
+      return NextResponse.json(
+        { error: 'Failed to create draft' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      post,
+    })
+  } catch (error) {
+    console.error('Create draft error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
 
 /**
  * GET /api/suflate/posts
@@ -20,8 +147,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Create supabase client for database operations
-    const supabase = await createClient()
+    // Use service client to bypass RLS (we filter by user's posts)
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
 
     const { searchParams } = new URL(request.url)
     const recordingId = searchParams.get('recordingId')
@@ -34,10 +165,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Build query
+    // Build query - filter by user_id to ensure user only sees their posts
     let query = supabase
       .from('posts')
       .select('*')
+      .eq('user_id', user.id)
 
     if (recordingId) {
       // Get posts via transcription_id from recording

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { generatePostVariations } from '@/lib/integrations/openrouter'
 import { randomUUID } from 'crypto'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
@@ -24,8 +24,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Create supabase client for database operations
-    const supabase = await createClient()
+    // Use service client to bypass RLS (we verify ownership via workspace membership)
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
 
     const body = await request.json()
     const { transcriptionId } = body
@@ -45,9 +49,25 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (transcriptionError || !transcription) {
+      console.error('Transcription fetch error:', transcriptionError)
       return NextResponse.json(
         { error: 'Transcription not found' },
         { status: 404 }
+      )
+    }
+
+    // Verify user has access to this transcription's workspace
+    const { data: membership, error: membershipError } = await supabase
+      .from('workspace_members')
+      .select('id')
+      .eq('workspace_id', transcription.workspace_id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (membershipError || !membership) {
+      return NextResponse.json(
+        { error: 'Unauthorized access to this transcription' },
+        { status: 403 }
       )
     }
 

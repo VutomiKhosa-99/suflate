@@ -14,9 +14,10 @@ interface DashboardLayoutProps {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   { name: 'Record', href: '/record', icon: '🎤' },
-  { name: 'Drafts', href: '/drafts', icon: '📝' },
-  { name: 'Scheduled', href: '/scheduled', icon: '📅' },
-  { name: 'Analytics', href: '/analytics', icon: '📈' },
+  { name: 'Drafts', href: '/drafts', icon: '📝', enabled: true },
+  { name: 'Calendar', href: '/calendar', icon: '📅', enabled: true },
+  { name: 'Analytics', href: '/analytics', icon: '📈', enabled: false },
+  { name: 'Settings', href: '/settings', icon: '⚙️', enabled: true },
 ]
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -77,6 +78,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <nav className="flex-1 p-4 space-y-2">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+            const isEnabled = item.enabled !== false
+            
+            if (!isEnabled) {
+              return (
+                <div
+                  key={item.name}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 cursor-not-allowed opacity-60"
+                  title="Coming soon"
+                >
+                  <span className="text-xl">{item.icon}</span>
+                  <span>{item.name}</span>
+                </div>
+              )
+            }
+            
             return (
               <Link
                 key={item.name}

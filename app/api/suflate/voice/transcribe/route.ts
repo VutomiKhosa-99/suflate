@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { transcribeAudioFromUrl } from '@/lib/integrations/assemblyai'
 import { randomUUID } from 'crypto'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
@@ -25,8 +25,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Create supabase client for database operations
-    const supabase = await createClient()
+    // Use service client to bypass RLS (we verify ownership manually)
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
 
     const body = await request.json()
     const { recordingId } = body
@@ -38,14 +42,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch recording from database
+    // Fetch recording from database (verify user owns it)
     const { data: recording, error: recordingError } = await supabase
       .from('voice_recordings')
       .select('*')
       .eq('id', recordingId)
+      .eq('user_id', user.id) // Ensure user owns this recording
       .single()
 
     if (recordingError || !recording) {
+      console.error('Recording fetch error:', recordingError)
       return NextResponse.json(
         { error: 'Recording not found' },
         { status: 404 }
@@ -78,22 +84,26 @@ export async function POST(request: NextRequest) {
       .update({ status: 'transcribing' })
       .eq('id', recordingId)
 
-    // Get public URL from Supabase Storage
-    const { data: urlData } = supabase.storage
+    // Get signed URL from Supabase Storage (valid for 1 hour)
+    // Using signed URL because the bucket may not be public
+    const { data: urlData, error: urlError } = await supabase.storage
       .from('voice-recordings')
-      .getPublicUrl(recording.storage_path)
+      .createSignedUrl(recording.storage_path, 3600) // 1 hour expiry
 
-    if (!urlData?.publicUrl) {
+    if (urlError || !urlData?.signedUrl) {
+      console.error('Failed to create signed URL:', urlError)
       return NextResponse.json(
         { error: 'Failed to get audio file URL' },
         { status: 500 }
       )
     }
 
+    console.log('Generated signed URL for audio file')
+
     // Transcribe audio via AssemblyAI
     let transcriptionResult
     try {
-      transcriptionResult = await transcribeAudioFromUrl(urlData.publicUrl)
+      transcriptionResult = await transcribeAudioFromUrl(urlData.signedUrl)
     } catch (error) {
       // Update recording status to 'error'
       await supabase

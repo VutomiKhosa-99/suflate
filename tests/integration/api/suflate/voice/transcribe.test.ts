@@ -1,3 +1,8 @@
+/**
+ * @jest-environment node
+ */
+
+import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/suflate/voice/transcribe/route'
 import { createClient } from '@/utils/supabase/server'
 import { transcribeAudioFromUrl } from '@/lib/integrations/assemblyai'
@@ -6,6 +11,15 @@ import { transcribeAudioFromUrl } from '@/lib/integrations/assemblyai'
 jest.mock('@/utils/supabase/server', () => ({
   createClient: jest.fn(),
 }))
+
+// Mock auth helper
+jest.mock('@/utils/supabase/auth-helper', () => ({
+  getAuthUser: jest.fn(),
+}))
+
+import { getAuthUser } from '@/utils/supabase/auth-helper'
+
+const mockGetAuthUser = getAuthUser as jest.MockedFunction<typeof getAuthUser>
 
 // Mock AssemblyAI integration
 jest.mock('@/lib/integrations/assemblyai', () => ({
@@ -47,6 +61,11 @@ describe('POST /api/suflate/voice/transcribe - Story 1.3', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // Mock authenticated user
+    mockGetAuthUser.mockResolvedValue({
+      user: { id: 'user-123', email: 'test@example.com' },
+      error: null,
+    })
     ;(createClient as jest.Mock).mockResolvedValue(mockSupabaseClient)
     mockSupabaseClient.from.mockImplementation(() => createMockFrom())
   })
@@ -107,11 +126,10 @@ describe('POST /api/suflate/voice/transcribe - Story 1.3', () => {
       mockSupabaseClient.from.mockReturnValueOnce(updateChain1 as any)
       mockSupabaseClient.from.mockReturnValueOnce(updateChain2 as any)
 
-      const request = new Request('http://localhost:3000/api/suflate/voice/transcribe', {
+      const request = new NextRequest('http://localhost:3000/api/suflate/voice/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recordingId }),
-      }) as any
+      })
 
       const response = await POST(request)
       const data = await response.json()
@@ -166,11 +184,10 @@ describe('POST /api/suflate/voice/transcribe - Story 1.3', () => {
       mockSupabaseClient.from.mockReturnValueOnce(updateChain1 as any)
       mockSupabaseClient.from.mockReturnValueOnce(updateChain2 as any)
 
-      const request = new Request('http://localhost:3000/api/suflate/voice/transcribe', {
+      const request = new NextRequest('http://localhost:3000/api/suflate/voice/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recordingId }),
-      }) as any
+      })
 
       await POST(request)
 
@@ -223,11 +240,10 @@ describe('POST /api/suflate/voice/transcribe - Story 1.3', () => {
       mockSupabaseClient.from.mockReturnValueOnce(mockUpdate1 as any)
       mockSupabaseClient.from.mockReturnValueOnce(mockUpdate2 as any)
 
-      const request = new Request('http://localhost:3000/api/suflate/voice/transcribe', {
+      const request = new NextRequest('http://localhost:3000/api/suflate/voice/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recordingId }),
-      }) as any
+      })
 
       await POST(request)
 
@@ -249,11 +265,10 @@ describe('POST /api/suflate/voice/transcribe - Story 1.3', () => {
       })
       mockSupabaseClient.from.mockReturnValueOnce(recordingChain as any)
 
-      const request = new Request('http://localhost:3000/api/suflate/voice/transcribe', {
+      const request = new NextRequest('http://localhost:3000/api/suflate/voice/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recordingId }),
-      }) as any
+      })
 
       const response = await POST(request)
       const data = await response.json()
@@ -291,11 +306,10 @@ describe('POST /api/suflate/voice/transcribe - Story 1.3', () => {
       updateChain.eq.mockResolvedValue({ data: {}, error: null })
       mockSupabaseClient.from.mockReturnValueOnce(updateChain as any)
 
-      const request = new Request('http://localhost:3000/api/suflate/voice/transcribe', {
+      const request = new NextRequest('http://localhost:3000/api/suflate/voice/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recordingId }),
-      }) as any
+      })
 
       const response = await POST(request)
       const data = await response.json()
@@ -340,11 +354,10 @@ describe('POST /api/suflate/voice/transcribe - Story 1.3', () => {
       updateChain.eq.mockResolvedValue({ data: {}, error: null })
       mockSupabaseClient.from.mockReturnValueOnce(updateChain as any)
 
-      const request = new Request('http://localhost:3000/api/suflate/voice/transcribe', {
+      const request = new NextRequest('http://localhost:3000/api/suflate/voice/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recordingId }),
-      }) as any
+      })
 
       const response = await POST(request)
       const data = await response.json()

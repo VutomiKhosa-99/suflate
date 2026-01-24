@@ -74,6 +74,8 @@ function TranscriptionDisplay({ recordingId }: { recordingId: string }) {
         transcription={transcription}
         onSave={handleSave}
       />
+      {/* Story 1.5 - Amplify into posts */}
+      <AmplificationButton recordingId={recordingId} transcriptionId={transcription?.id} />
     </div>
   )
 }
@@ -203,9 +205,6 @@ export default function RecordingDetailPage() {
             <div className="border rounded-lg p-6">
               <h2 className="text-xl font-semibold mb-4">Transcription</h2>
               <TranscriptionDisplay recordingId={id} />
-              
-              {/* Story 1.5 - Amplify into posts */}
-              <AmplificationButton recordingId={id} transcriptionId={transcription?.id || undefined} />
             </div>
           )}
           {/* TODO: Story 1.4 - Show editing interface */}

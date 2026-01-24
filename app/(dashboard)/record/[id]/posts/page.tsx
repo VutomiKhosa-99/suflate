@@ -1,9 +1,9 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PostVariationTabs } from '@/components/features/post-variations/post-variation-tabs'
 import { Button } from '@/components/ui/button'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 
 interface Post {
   id: string
@@ -26,12 +26,9 @@ const variationTypeToLabel: Record<string, 'Story' | 'Lesson' | 'Opinion'> = {
  * Screen 5: Generated Posts - Post Variations Page
  * Deliver Aha moment with post variations
  */
-export default function PostVariationsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = use(params)
+export default function PostVariationsPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)

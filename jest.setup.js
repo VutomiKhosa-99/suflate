@@ -12,16 +12,18 @@ if (typeof global.URL !== 'undefined') {
   }
 }
 
-// Mock window.location
-Object.defineProperty(window, 'location', {
-  value: {
-    href: '',
-    assign: jest.fn(),
-    replace: jest.fn(),
-    reload: jest.fn(),
-  },
-  writable: true,
-})
+// Mock window.location - only in jsdom environment
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'location', {
+    value: {
+      href: '',
+      assign: jest.fn(),
+      replace: jest.fn(),
+      reload: jest.fn(),
+    },
+    writable: true,
+  })
+}
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
