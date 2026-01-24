@@ -1,13 +1,27 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/ui/logo'
-import { Mic, FileText, Calendar, Settings, LogOut } from 'lucide-react'
+import { Mic, FileText, Calendar, Settings, LogOut, X } from 'lucide-react'
 import { useAuth } from '@/lib/auth/auth-context'
 
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth()
+  const searchParams = useSearchParams()
+  const [notification, setNotification] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Check for LinkedIn connection status
+    if (searchParams.get('linkedin') === 'connected') {
+      setNotification('LinkedIn connected successfully! You can now post directly to LinkedIn.')
+    }
+    if (searchParams.get('error')?.startsWith('linkedin')) {
+      setNotification('Failed to connect LinkedIn. Please try again.')
+    }
+  }, [searchParams])
 
   if (loading) {
     return (
@@ -19,6 +33,18 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Notification */}
+      {notification && (
+        <div className="bg-green-50 border-b border-green-200">
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+            <p className="text-green-800 text-sm">{notification}</p>
+            <button onClick={() => setNotification(null)} className="text-green-600 hover:text-green-800">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -80,15 +106,17 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200 opacity-60 cursor-not-allowed">
-            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-              <Settings className="w-6 h-6 text-gray-400" />
+          <Link href="/settings" className="block">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                <Settings className="w-6 h-6 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Settings</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage your account
+              </p>
             </div>
-            <h3 className="font-semibold text-gray-900">Settings</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Manage your account
-            </p>
-          </div>
+          </Link>
         </div>
 
         {/* Getting Started */}

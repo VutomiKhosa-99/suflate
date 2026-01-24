@@ -157,4 +157,100 @@ test.describe.serial('Authentication Flow', () => {
     // May return 400/500 due to invalid audio, but not 401
     expect(response.status()).not.toBe(401)
   })
+
+  test('should redirect logged-in user from login page to dashboard', async ({ page }) => {
+    // Login first
+    await page.goto('/login')
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
+    await page.click('button:has-text("Login with Email")')
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
+    
+    // Wait for session to sync
+    await page.waitForTimeout(1000)
+
+    // Now try to navigate to login page manually
+    await page.goto('/login')
+    await page.waitForLoadState('networkidle')
+    
+    // Should be redirected back to dashboard
+    expect(page.url()).toContain('/dashboard')
+    expect(page.url()).not.toContain('/login')
+  })
+
+  test('should redirect logged-in user from signup page to dashboard', async ({ page }) => {
+    // Login first
+    await page.goto('/login')
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
+    await page.click('button:has-text("Login with Email")')
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
+    
+    // Wait for session to sync
+    await page.waitForTimeout(1000)
+
+    // Now try to navigate to signup page manually
+    await page.goto('/signup')
+    await page.waitForLoadState('networkidle')
+    
+    // Should be redirected back to dashboard
+    expect(page.url()).toContain('/dashboard')
+    expect(page.url()).not.toContain('/signup')
+  })
+
+  test('should redirect logged-in user from landing page to dashboard', async ({ page }) => {
+    // Login first
+    await page.goto('/login')
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
+    await page.click('button:has-text("Login with Email")')
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
+    
+    // Wait for session to sync
+    await page.waitForTimeout(1000)
+
+    // Now try to navigate to landing page manually
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+    
+    // Should be redirected to dashboard
+    expect(page.url()).toContain('/dashboard')
+  })
+
+  test('should access settings page when logged in', async ({ page }) => {
+    // Login first
+    await page.goto('/login')
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
+    await page.click('button:has-text("Login with Email")')
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
+    
+    // Navigate to settings
+    await page.goto('/settings')
+    await page.waitForLoadState('networkidle')
+    
+    // Should stay on settings page
+    expect(page.url()).toContain('/settings')
+    
+    // Should see settings content
+    await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /connected services/i })).toBeVisible()
+  })
+
+  test('should show forgot password functionality', async ({ page }) => {
+    await page.goto('/login')
+    
+    // Forgot password button should be visible
+    const forgotButton = page.getByRole('button', { name: /forgot password/i })
+    await expect(forgotButton).toBeVisible()
+  })
+
+  test('should show reset password page', async ({ page }) => {
+    await page.goto('/auth/reset-password')
+    
+    // Should show reset password form
+    await expect(page.getByRole('heading', { name: /reset your password/i })).toBeVisible()
+    await expect(page.getByLabel(/new password/i)).toBeVisible()
+    await expect(page.getByLabel(/confirm password/i)).toBeVisible()
+  })
 })

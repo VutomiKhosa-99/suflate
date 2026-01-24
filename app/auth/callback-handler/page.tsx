@@ -23,10 +23,11 @@ function CallbackHandler() {
         hash: window.location.hash ? window.location.hash.substring(0, 50) + '...' : 'none'
       })
 
-      // Handle email verification (OTP)
+      // Handle email verification or password recovery (OTP)
       if (token_hash && type) {
-        setStatus('Verifying email...')
-        console.log('[Callback Handler] Verifying OTP...')
+        const isRecovery = type === 'recovery'
+        setStatus(isRecovery ? 'Verifying reset link...' : 'Verifying email...')
+        console.log('[Callback Handler] Verifying OTP, type:', type)
         
         const { data, error: verifyError } = await supabase.auth.verifyOtp({
           type: type as any,
@@ -40,8 +41,16 @@ function CallbackHandler() {
         }
 
         if (data.session) {
-          console.log('[Callback Handler] Email verified for:', data.user?.email)
+          console.log('[Callback Handler] OTP verified for:', data.user?.email)
           await syncSessionToCookies(data.session)
+          
+          // For password recovery, redirect to reset password page
+          if (isRecovery) {
+            console.log('[Callback Handler] Redirecting to reset password')
+            window.location.href = '/auth/reset-password'
+            return
+          }
+          
           return redirectUser(data.user!, '/welcome')
         }
       }

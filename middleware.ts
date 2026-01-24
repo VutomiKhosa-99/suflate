@@ -40,7 +40,8 @@ export async function middleware(request: NextRequest) {
   // Debug: log cookies on protected routes
   const isProtectedRoute = request.nextUrl.pathname.includes('dashboard') || 
                            request.nextUrl.pathname.includes('record') ||
-                           request.nextUrl.pathname.includes('editor')
+                           request.nextUrl.pathname.includes('editor') ||
+                           request.nextUrl.pathname.includes('settings')
   const authCookies = allCookies.filter(c => c.name.includes('sb-'))
   if (isProtectedRoute) {
     console.log('[Middleware] Checking auth for:', request.nextUrl.pathname)
@@ -115,7 +116,8 @@ export async function middleware(request: NextRequest) {
   // Protect dashboard routes - redirect to login if not authenticated
   if (request.nextUrl.pathname.startsWith('/dashboard') || 
       request.nextUrl.pathname.startsWith('/record') ||
-      request.nextUrl.pathname.startsWith('/editor')) {
+      request.nextUrl.pathname.startsWith('/editor') ||
+      request.nextUrl.pathname.startsWith('/settings')) {
     if (!user) {
       const redirectUrl = request.nextUrl.clone()
       redirectUrl.pathname = '/login'
@@ -124,8 +126,9 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Redirect authenticated users away from auth pages
-  if ((request.nextUrl.pathname === '/login' || 
+  // Redirect authenticated users away from public/auth pages to dashboard
+  if ((request.nextUrl.pathname === '/' ||
+       request.nextUrl.pathname === '/login' || 
        request.nextUrl.pathname === '/signup') && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
