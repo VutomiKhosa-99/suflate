@@ -26,10 +26,11 @@ export default defineConfig({
   },
 
   reporter: [
-    ['html', { outputFolder: 'test-results/html' }],
-    ['junit', { outputFile: 'test-results/junit.xml' }],
+    ['html', { outputFolder: 'playwright-report' }],
     ['list'],
   ],
+  
+  outputDir: 'test-results',
 
   projects: [
     {

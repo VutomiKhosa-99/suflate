@@ -14,13 +14,10 @@ export async function signInWithLinkedIn() {
   const supabase = createClient()
   
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'linkedin',
+    provider: 'linkedin_oidc',
     options: {
+      // Redirect to server callback which handles PKCE exchange
       redirectTo: `${window.location.origin}/auth/callback`,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent',
-      },
     },
   })
 

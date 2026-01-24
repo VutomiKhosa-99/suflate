@@ -1,30 +1,35 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
 
-/**
- * POST /api/auth/logout
- * Log out the current user
- */
+const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)/)?.[1] || ''
+
 export async function POST(request: NextRequest) {
-  try {
-    const supabase = await createClient()
-
-    const { error } = await supabase.auth.signOut()
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      )
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Logout error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+  const response = NextResponse.json({ success: true })
+  
+  // Clear all Supabase auth cookies
+  const cookieName = `sb-${projectRef}-auth-token`
+  
+  // Clear main cookie
+  response.cookies.set(cookieName, '', {
+    path: '/',
+    maxAge: 0,
+  })
+  
+  // Clear chunked cookies (up to 10 chunks)
+  for (let i = 0; i < 10; i++) {
+    response.cookies.set(`${cookieName}.${i}`, '', {
+      path: '/',
+      maxAge: 0,
+    })
   }
+  
+  // Clear code verifier cookie
+  response.cookies.set(`${cookieName}-code-verifier`, '', {
+    path: '/',
+    maxAge: 0,
+  })
+  
+  console.log('[Logout API] Cleared auth cookies')
+  
+  return response
 }

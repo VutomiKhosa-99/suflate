@@ -4,16 +4,18 @@ import type { User } from '@supabase/supabase-js'
 
 /**
  * Get authenticated user from request cookies
- * This handles the @supabase/ssr v0.1.0 cookie parsing issue
+ * Handles chunked cookies and the @supabase/ssr v0.1.0 cookie parsing issue
  */
 export async function getAuthUser(request: NextRequest): Promise<{ user: User | null; error: string | null }> {
+  const allCookies = request.cookies.getAll()
+  
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll()
+          return allCookies
         },
         setAll() {
           // We don't need to set cookies for auth checks
@@ -29,17 +31,40 @@ export async function getAuthUser(request: NextRequest): Promise<{ user: User | 
     return { user: data.user, error: null }
   }
 
-  // Fallback: manually parse the auth cookie
-  const authCookie = request.cookies.getAll().find(c => c.name.includes('-auth-token'))
+  // Fallback: manually parse chunked auth cookies
+  const authCookies = allCookies.filter(c => c.name.includes('sb-') && c.name.includes('-auth-token') && !c.name.includes('code-verifier'))
   
-  if (authCookie?.value) {
+  if (authCookies.length > 0) {
     try {
-      const sessionData = JSON.parse(authCookie.value)
+      // Check if cookies are chunked (.0, .1, etc.)
+      const isChunked = authCookies.some(c => c.name.match(/\.\d+$/))
+      let combinedValue = ''
+      
+      if (isChunked) {
+        // Sort by chunk number and combine
+        const chunks = authCookies
+          .filter(c => c.name.match(/\.\d+$/))
+          .sort((a, b) => {
+            const aNum = parseInt(a.name.match(/\.(\d+)$/)?.[1] || '0')
+            const bNum = parseInt(b.name.match(/\.(\d+)$/)?.[1] || '0')
+            return aNum - bNum
+          })
+        combinedValue = chunks.map(c => c.value).join('')
+      } else {
+        combinedValue = authCookies[0].value
+      }
+      
+      // Handle base64 encoding
+      if (combinedValue.startsWith('base64-')) {
+        combinedValue = Buffer.from(combinedValue.replace('base64-', ''), 'base64').toString()
+      }
+      
+      const sessionData = JSON.parse(combinedValue)
       
       if (sessionData.access_token) {
         const { data: sessionResult, error: sessionError } = await supabase.auth.setSession({
           access_token: sessionData.access_token,
-          refresh_token: sessionData.refresh_token,
+          refresh_token: sessionData.refresh_token || '',
         })
         
         if (sessionResult?.user) {
@@ -52,6 +77,7 @@ export async function getAuthUser(request: NextRequest): Promise<{ user: User | 
       }
     } catch (e) {
       // Cookie parse failed
+      console.error('[Auth Helper] Cookie parse error:', e)
     }
   }
 

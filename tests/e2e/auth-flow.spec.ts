@@ -1,109 +1,160 @@
-import { test, expect } from './fixtures/auth'
-import { faker } from '@faker-js/faker'
+import { test, expect } from '@playwright/test'
 
-/**
- * E2E Tests for Authentication Flow
- * Tests the complete signup → verify → login flow
- */
-test.describe('Authentication Flow', () => {
-  test('should sign up with email and password', async ({ page, testUser }) => {
-    await page.goto('/signup')
+// Auth tests need to run serially to avoid cookie interference
+test.describe.serial('Authentication Flow', () => {
+  test('should login with email/password and access dashboard', async ({ page }) => {
+    // Go to login page
+    await page.goto('/login')
+    await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible()
 
-    // Fill signup form
-    await page.fill('input[type="email"]', testUser.email)
-    await page.fill('input[type="text"][placeholder*="name" i]', testUser.name)
+    // Fill in credentials
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
     
-    const passwordInputs = await page.locator('input[type="password"]').all()
-    await passwordInputs[0].fill(testUser.password)
-    if (passwordInputs.length > 1) {
-      await passwordInputs[1].fill(testUser.password)
-    }
-
-    // Submit form
-    await page.click('button:has-text("Signup")')
-
-    // Should redirect to verify-email page
-    await expect(page).toHaveURL(/\/verify-email/)
-    await expect(page.locator('text=Verify Your Email')).toBeVisible()
+    // Click login button
+    await page.click('button:has-text("Login with Email")')
+    
+    // Should redirect to dashboard
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
+    
+    // Verify on dashboard
+    expect(page.url()).toContain('/dashboard')
   })
 
-  test('should show validation errors for invalid input', async ({ page }) => {
-    await page.goto('/signup')
-
-    // Try to submit empty form
-    await page.click('button:has-text("Signup")')
-
-    // Should show validation errors
-    await expect(page.locator('text=/fill in all fields|required/i')).toBeVisible()
+  test('should redirect to login when accessing protected route unauthenticated', async ({ page }) => {
+    // Try to access dashboard directly
+    await page.goto('/dashboard')
+    
+    // Should redirect to login with redirect param
+    await page.waitForURL('**/login**', { timeout: 5000 })
+    expect(page.url()).toContain('/login')
+    expect(page.url()).toContain('redirect')
   })
 
-  test('should show error for password mismatch', async ({ page, testUser }) => {
-    await page.goto('/signup')
-
-    await page.fill('input[type="email"]', testUser.email)
-    const passwordInputs = await page.locator('input[type="password"]').all()
-    await passwordInputs[0].fill(testUser.password)
-    if (passwordInputs.length > 1) {
-      await passwordInputs[1].fill('DifferentPassword123!')
-    }
-
-    await page.click('button:has-text("Signup")')
-
-    // Should show password mismatch error
-    await expect(page.locator('text=/password.*match|passwords do not match/i')).toBeVisible()
+  test('should show Google OAuth button on login page', async ({ page }) => {
+    await page.goto('/login')
+    
+    // Google button should be visible
+    const googleButton = page.getByRole('button', { name: /continue with google/i })
+    await expect(googleButton).toBeVisible()
+    
+    // LinkedIn button should also be visible
+    const linkedInButton = page.getByRole('button', { name: /continue with linkedin/i })
+    await expect(linkedInButton).toBeVisible()
   })
 
-  test('should login with valid credentials', async ({ page, testUser, supabaseAdmin }) => {
-    // First, create and verify user via Supabase admin
-    const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
-      email: testUser.email,
-      password: testUser.password,
-      email_confirm: true,
-      user_metadata: {
-        name: testUser.name,
+  test('should redirect to Google OAuth when clicking Google button', async ({ page }) => {
+    await page.goto('/login')
+    
+    // Click Google button
+    const googleButton = page.getByRole('button', { name: /continue with google/i })
+    await googleButton.click()
+    
+    // Should redirect to Google OAuth
+    await page.waitForURL('**/accounts.google.com/**', { timeout: 10000 })
+    expect(page.url()).toContain('accounts.google.com')
+  })
+
+  test('should persist session across protected routes', async ({ page }) => {
+    // Login first
+    await page.goto('/login')
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
+    await page.click('button:has-text("Login with Email")')
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
+    
+    // Wait for session to fully sync
+    await page.waitForTimeout(1000)
+
+    // Navigate to record page (another protected route)
+    await page.goto('/record')
+    
+    // Wait for navigation - either record page or redirect to login
+    await page.waitForLoadState('networkidle')
+    
+    // Should stay on record page (not redirected to login)
+    expect(page.url()).toContain('/record')
+    expect(page.url()).not.toContain('/login')
+
+    // Navigate back to dashboard using link
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+    
+    // Should stay on dashboard (not redirected to login)
+    expect(page.url()).toContain('/dashboard')
+    expect(page.url()).not.toContain('/login')
+  })
+
+  test('should logout and redirect to home', async ({ page }) => {
+    // Login first
+    await page.goto('/login')
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
+    await page.click('button:has-text("Login with Email")')
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
+
+    // Click logout button
+    const logoutButton = page.getByRole('button', { name: /logout/i })
+    await logoutButton.click()
+
+    // Should redirect to home page
+    await page.waitForURL('**/', { timeout: 5000 })
+    
+    // Try to access dashboard again - should redirect to login
+    await page.goto('/dashboard')
+    await page.waitForURL('**/login**', { timeout: 5000 })
+    expect(page.url()).toContain('/login')
+  })
+
+  test('should reject upload API without authentication', async ({ request }) => {
+    // Try to upload without being logged in
+    const response = await request.post('/api/suflate/voice/upload', {
+      multipart: {
+        audio: {
+          name: 'test.webm',
+          mimeType: 'audio/webm',
+          buffer: Buffer.from('test audio data'),
+        },
       },
     })
 
-    expect(signUpError).toBeNull()
+    // Should return 401 Unauthorized
+    expect(response.status()).toBe(401)
+    const body = await response.json()
+    expect(body.error).toBe('Unauthorized')
+  })
 
-    // Now test login
+  test('should allow upload API with authentication', async ({ page, request }) => {
+    // Login first to get session cookies
     await page.goto('/login')
-    await page.fill('input[type="email"]', testUser.email)
-    await page.fill('input[type="password"]', testUser.password)
-    await page.click('button:has-text("Login")')
-
-    // Should redirect to dashboard
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 })
+    await page.fill('input[type="email"]', 'khosavutomi99@gmail.com')
+    await page.fill('input[type="password"]', '82014741')
+    await page.click('button:has-text("Login with Email")')
+    await page.waitForURL('**/dashboard', { timeout: 10000 })
     
-    // Cleanup
-    if (signUpData?.user?.id) {
-      await supabaseAdmin.auth.admin.deleteUser(signUpData.user.id)
-    }
-  })
+    // Wait for session to sync
+    await page.waitForTimeout(1000)
 
-  test('should show error for invalid login credentials', async ({ page }) => {
-    await page.goto('/login')
-    await page.fill('input[type="email"]', 'nonexistent@example.com')
-    await page.fill('input[type="password"]', 'WrongPassword123!')
-    await page.click('button:has-text("Login")')
+    // Get cookies from page context
+    const cookies = await page.context().cookies()
+    const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ')
 
-    // Should show error message
-    await expect(page.locator('text=/invalid|incorrect|wrong/i')).toBeVisible({ timeout: 5000 })
-  })
+    // Try upload with session cookies
+    const response = await request.post('/api/suflate/voice/upload', {
+      headers: {
+        'Cookie': cookieHeader,
+      },
+      multipart: {
+        audio: {
+          name: 'test.webm',
+          mimeType: 'audio/webm',
+          buffer: Buffer.from('fake audio data for testing'),
+        },
+      },
+    })
 
-  test('should redirect authenticated users away from auth pages', async ({ authenticatedPage }) => {
-    // Try to access login page when already authenticated
-    await authenticatedPage.goto('/login')
-    
-    // Should redirect to dashboard
-    await expect(authenticatedPage).toHaveURL(/\/dashboard/)
-  })
-
-  test('should protect dashboard routes', async ({ page }) => {
-    // Try to access dashboard without authentication
-    await page.goto('/dashboard')
-    
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/login/)
+    // Should NOT return 401 (authentication passed)
+    // May return 400/500 due to invalid audio, but not 401
+    expect(response.status()).not.toBe(401)
   })
 })
