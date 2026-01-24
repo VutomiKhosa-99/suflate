@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Logo } from '@/components/ui/logo'
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,8 +30,11 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
+      const redirectTo = searchParams.get('redirect') || '/dashboard'
       const supabase = createClient()
 
+      // Sign in directly with client-side Supabase
+      // This ensures cookies are properly set in the browser
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -41,10 +45,13 @@ export default function LoginPage() {
         return
       }
 
-      if (data.user) {
-        router.push('/dashboard')
-        router.refresh()
+      if (!data.session) {
+        setError('No session returned')
+        return
       }
+
+      // Use window.location for a full page navigation to ensure cookies are sent
+      window.location.href = redirectTo
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to log in')
     } finally {

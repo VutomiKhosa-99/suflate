@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { getAuthUser } from '@/utils/supabase/auth-helper'
 
 /**
  * PATCH /api/suflate/transcription/update
@@ -13,13 +14,15 @@ import { createClient } from '@/utils/supabase/server'
  */
 export async function PATCH(request: NextRequest) {
   try {
-    // Authentication check - Epic 2
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Authentication check using helper that handles cookie parsing
+    const { user, error: authError } = await getAuthUser(request)
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Create supabase client for database operations
+    const supabase = await createClient()
 
     const body = await request.json()
     const { transcriptionId, processed_text } = body
@@ -38,7 +41,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // Verify transcription exists (reuse supabase client from above)
+    // Verify transcription exists
     const { data: existingTranscription, error: fetchError } = await supabase
       .from('transcriptions')
       .select('id')

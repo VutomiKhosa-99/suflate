@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { generatePostVariations } from '@/lib/integrations/openrouter'
 import { randomUUID } from 'crypto'
+import { getAuthUser } from '@/utils/supabase/auth-helper'
 
 /**
  * POST /api/suflate/amplify
@@ -16,13 +17,15 @@ import { randomUUID } from 'crypto'
  */
 export async function POST(request: NextRequest) {
   try {
-    // Authentication check - Epic 2
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Authentication check using helper that handles cookie parsing
+    const { user, error: authError } = await getAuthUser(request)
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Create supabase client for database operations
+    const supabase = await createClient()
 
     const body = await request.json()
     const { transcriptionId } = body

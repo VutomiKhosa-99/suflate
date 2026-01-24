@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { getAuthUser } from '@/utils/supabase/auth-helper'
 
 /**
  * GET /api/auth/workspace
@@ -11,8 +12,8 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    // Get current user using helper that handles cookie parsing
+    const { user, error: userError } = await getAuthUser(request)
 
     if (userError || !user) {
       return NextResponse.json(

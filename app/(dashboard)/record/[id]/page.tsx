@@ -1,6 +1,7 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { TranscriptionEditor } from '@/components/features/transcription-editor/transcription-editor'
@@ -79,12 +80,9 @@ function TranscriptionDisplay({ recordingId }: { recordingId: string }) {
 
 // This page shows after recording is uploaded
 // Will display transcription and editing interface
-export default function RecordingDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = use(params)
+export default function RecordingDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const [recording, setRecording] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -92,22 +90,19 @@ export default function RecordingDetailPage({
   useEffect(() => {
     async function fetchRecording() {
       try {
-        const supabase = createClient()
+        // Fetch via API to handle auth and RLS properly
+        const response = await fetch(`/api/suflate/voice/${id}`, {
+          credentials: 'include',
+        })
         
-        // TODO: Add authentication check once Epic 2 is implemented
-        // For now, this will fail until auth is set up
-        const { data, error: fetchError } = await supabase
-          .from('voice_recordings')
-          .select('*')
-          .eq('id', id)
-          .single()
-
-        if (fetchError) {
-          setError('Recording not found')
+        if (!response.ok) {
+          const errorData = await response.json()
+          setError(errorData.error || 'Recording not found')
           return
         }
 
-        setRecording(data)
+        const data = await response.json()
+        setRecording(data.recording)
       } catch (err) {
         setError('Failed to load recording')
       } finally {
@@ -115,7 +110,9 @@ export default function RecordingDetailPage({
       }
     }
 
-    fetchRecording()
+    if (id) {
+      fetchRecording()
+    }
   }, [id])
 
   if (loading) {

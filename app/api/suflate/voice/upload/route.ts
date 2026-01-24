@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { getAuthUser } from '@/utils/supabase/auth-helper'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_MIME_TYPES = [
@@ -17,9 +18,8 @@ const ALLOWED_MIME_TYPES = [
 
 export async function POST(request: NextRequest) {
   try {
-    // Authentication check - Epic 2
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Authentication check using helper that handles cookie parsing
+    const { user, error: authError } = await getAuthUser(request)
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -55,11 +55,14 @@ export async function POST(request: NextRequest) {
     // Client-side validation attempts to check duration, but server-side validation
     // happens during AssemblyAI transcription process
 
+    // Create supabase client for database operations
+    const supabase = await createClient()
+
     // Get user's default workspace - Epic 2
     const userId = user.id
     
     // Get user's default workspace
-    const { data: workspace, error: workspaceError } = await supabase
+    let { data: workspace, error: workspaceError } = await supabase
       .from('workspaces')
       .select('id')
       .eq('owner_id', userId)
@@ -67,11 +70,52 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .single()
 
+    // If no workspace exists, create one (fallback for users created before trigger)
+    // Use service client to bypass RLS for admin operations
     if (workspaceError || !workspace) {
-      return NextResponse.json(
-        { error: 'Failed to get workspace. Please contact support.' },
-        { status: 500 }
+      const serviceClient = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
       )
+
+      // First, ensure user exists in public.users table (for users created before trigger)
+      await serviceClient
+        .from('users')
+        .upsert({
+          id: userId,
+          email: user.email,
+          name: user.user_metadata?.name || user.email?.split('@')[0],
+        }, { onConflict: 'id' })
+
+      const { data: newWorkspace, error: createError } = await serviceClient
+        .from('workspaces')
+        .insert({
+          name: `${user.email?.split('@')[0]}'s Workspace`,
+          owner_id: userId,
+          plan: 'starter',
+          credits_remaining: 100,
+          credits_total: 100,
+        })
+        .select('id')
+        .single()
+
+      if (createError || !newWorkspace) {
+        console.error('Failed to create workspace:', createError)
+        return NextResponse.json(
+          { error: 'Failed to create workspace. Please contact support.' },
+          { status: 500 }
+        )
+      }
+
+      workspace = newWorkspace
+
+      // Also add user as workspace member (using service client to bypass RLS)
+      await serviceClient.from('workspace_members').insert({
+        workspace_id: workspace.id,
+        user_id: userId,
+        role: 'owner',
+      })
     }
 
     const workspaceId = workspace.id
@@ -84,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     // Use service role client for storage uploads (bypasses RLS)
     // This is needed because we're using placeholder auth for testing
-    const serviceClient = createServiceClient(
+    const serviceClient = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
@@ -131,8 +175,8 @@ export async function POST(request: NextRequest) {
     // For now, we'll estimate or let AssemblyAI determine it
     const estimatedDuration = null // Will be determined during transcription
 
-    // Create voice_recordings record
-    const { data: recordingData, error: dbError } = await supabase
+    // Create voice_recordings record (using service client to bypass RLS)
+    const { data: recordingData, error: dbError } = await serviceClient
       .from('voice_recordings')
       .insert({
         id: recordingId,

@@ -31,8 +31,33 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session if expired
-  const { data: { user } } = await supabase.auth.getUser()
+  // Try to get user from session
+  let user = null
+  
+  // First try the standard getUser approach
+  const { data } = await supabase.auth.getUser()
+  user = data?.user
+  
+  // If that fails, try to get session from the cookie directly
+  if (!user) {
+    // Look for the auth token cookie
+    const authCookie = request.cookies.getAll().find(c => c.name.includes('-auth-token'))
+    if (authCookie?.value) {
+      try {
+        const sessionData = JSON.parse(authCookie.value)
+        if (sessionData.access_token) {
+          // Set the session on the client
+          const { data: sessionResult } = await supabase.auth.setSession({
+            access_token: sessionData.access_token,
+            refresh_token: sessionData.refresh_token,
+          })
+          user = sessionResult?.user
+        }
+      } catch (e) {
+        // Cookie parse failed, user stays null
+      }
+    }
+  }
 
   // Protect dashboard routes - redirect to login if not authenticated
   if (request.nextUrl.pathname.startsWith('/dashboard') || 
