@@ -57,6 +57,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
 
   // Calculate month boundaries for API query
@@ -119,6 +120,14 @@ export default function CalendarPage() {
     setCurrentMonth(new Date())
   }
 
+  // Helper to format date as YYYY-MM-DD in LOCAL timezone
+  const formatLocalDate = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   // Generate calendar days for the month
   const generateCalendarDays = () => {
     const year = currentMonth.getFullYear()
@@ -135,13 +144,14 @@ export default function CalendarPage() {
       days.push({ date: null, posts: [] })
     }
     
-    // Add actual days
+    // Add actual days - compare dates in LOCAL timezone
     for (let day = 1; day <= totalDays; day++) {
       const date = new Date(year, month, day)
-      const dateStr = date.toISOString().split('T')[0]
-      const postsOnDay = scheduledPosts.filter(p => 
-        new Date(p.scheduled_for).toISOString().split('T')[0] === dateStr
-      )
+      const dateStr = formatLocalDate(date)
+      const postsOnDay = scheduledPosts.filter(p => {
+        const postDate = new Date(p.scheduled_for)
+        return formatLocalDate(postDate) === dateStr
+      })
       days.push({ date, posts: postsOnDay })
     }
     
@@ -175,9 +185,29 @@ export default function CalendarPage() {
       // Refresh the calendar
       fetchScheduledPosts()
       setSelectedPost(null)
+      setSelectedDate(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel')
     }
+  }
+
+  // Get posts for the selected date (using local timezone)
+  const getPostsForSelectedDate = () => {
+    if (!selectedDate) return []
+    const dateStr = formatLocalDate(selectedDate)
+    return scheduledPosts.filter(p => {
+      const postDate = new Date(p.scheduled_for)
+      return formatLocalDate(postDate) === dateStr
+    })
+  }
+
+  const formatDateDisplay = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    })
   }
 
   const calendarDays = generateCalendarDays()
@@ -274,13 +304,17 @@ export default function CalendarPage() {
             {calendarDays.map((day, index) => {
               const isToday = day.date && 
                 day.date.toDateString() === new Date().toDateString()
+              const isSelected = day.date && selectedDate &&
+                day.date.toDateString() === selectedDate.toDateString()
               
               return (
-                <div
+                <button
                   key={index}
-                  className={`min-h-[100px] p-2 border border-gray-100 rounded-lg ${
-                    day.date ? 'bg-white' : 'bg-gray-50'
-                  } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
+                  onClick={() => day.date && setSelectedDate(day.date)}
+                  disabled={!day.date}
+                  className={`min-h-[100px] p-2 border border-gray-100 rounded-lg text-left transition-all ${
+                    day.date ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50 cursor-default'
+                  } ${isToday ? 'ring-2 ring-blue-500' : ''} ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
                 >
                   {day.date && (
                     <>
@@ -291,19 +325,18 @@ export default function CalendarPage() {
                       </div>
                       <div className="space-y-1">
                         {day.posts.slice(0, 3).map(post => (
-                          <button
+                          <div
                             key={post.id}
-                            onClick={() => setSelectedPost(post)}
-                            className={`w-full text-left px-2 py-1 rounded text-xs text-white truncate ${
+                            className={`w-full px-2 py-1 rounded text-xs text-white truncate ${
                               getPostStatusColor(post)
-                            } hover:opacity-80 transition-opacity`}
+                            }`}
                             title={post.posts?.content?.slice(0, 100)}
                           >
                             {new Date(post.scheduled_for).toLocaleTimeString([], { 
                               hour: '2-digit', 
                               minute: '2-digit' 
                             })}
-                          </button>
+                          </div>
                         ))}
                         {day.posts.length > 3 && (
                           <div className="text-xs text-gray-500 text-center">
@@ -313,11 +346,86 @@ export default function CalendarPage() {
                       </div>
                     </>
                   )}
-                </div>
+                </button>
               )
             })}
           </div>
         </Card>
+      )}
+
+      {/* Date Posts List Modal */}
+      {selectedDate && !selectedPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setSelectedDate(null)}
+          />
+          <Card className="relative z-10 w-full max-w-2xl mx-4 p-6 max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {formatDateDisplay(selectedDate)}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {getPostsForSelectedDate().length} post{getPostsForSelectedDate().length !== 1 ? 's' : ''} scheduled
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {getPostsForSelectedDate().length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <CalendarIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p>No posts scheduled for this date</p>
+                <Link href="/drafts" className="mt-4 inline-block">
+                  <Button size="sm">Schedule a Post</Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3 overflow-y-auto flex-1">
+                {getPostsForSelectedDate().map(post => (
+                  <button
+                    key={post.id}
+                    onClick={() => setSelectedPost(post)}
+                    className="w-full text-left p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${getPostStatusColor(post)}`} />
+                        <span className="text-sm font-medium">{getPostStatusLabel(post)}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-sm text-gray-500">
+                        <Clock className="w-4 h-4" />
+                        {new Date(post.scheduled_for).toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 line-clamp-2">
+                      {post.posts?.content?.slice(0, 150)}
+                      {(post.posts?.content?.length || 0) > 150 && '...'}
+                    </p>
+                    {post.posts?.tags && post.posts.tags.length > 0 && (
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {post.posts.tags.slice(0, 3).map(tag => (
+                          <span key={tag} className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {/* Post Detail Modal */}
@@ -325,11 +433,23 @@ export default function CalendarPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50"
-            onClick={() => setSelectedPost(null)}
+            onClick={() => {
+              setSelectedPost(null)
+              if (!selectedDate) setSelectedDate(null)
+            }}
           />
-          <Card className="relative z-10 w-full max-w-lg mx-4 p-6">
+          <Card className="relative z-10 w-full max-w-2xl mx-4 p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
+                {selectedDate && (
+                  <button
+                    onClick={() => setSelectedPost(null)}
+                    className="text-sm text-blue-600 hover:text-blue-800 mb-2 flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back to list
+                  </button>
+                )}
                 <div className="flex items-center gap-2 mb-1">
                   <div className={`w-3 h-3 rounded-full ${getPostStatusColor(selectedPost)}`} />
                   <span className="text-sm font-medium">{getPostStatusLabel(selectedPost)}</span>
@@ -340,8 +460,11 @@ export default function CalendarPage() {
                 </div>
               </div>
               <button
-                onClick={() => setSelectedPost(null)}
-                className="text-gray-400 hover:text-gray-600"
+                onClick={() => {
+                  setSelectedPost(null)
+                  setSelectedDate(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 text-xl"
               >
                 ×
               </button>
@@ -401,12 +524,15 @@ export default function CalendarPage() {
                 </Button>
               )}
               {selectedPost.posts?.status === 'published' && (
-                <Button variant="outline" asChild>
-                  <a href="#" target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    View
-                  </a>
-                </Button>
+                <a 
+                  href="#" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium border border-gray-200 rounded-md hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View
+                </a>
               )}
             </div>
           </Card>

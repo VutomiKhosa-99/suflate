@@ -76,6 +76,8 @@ function TranscriptionDisplay({ recordingId }: { recordingId: string }) {
       />
       {/* Story 1.5 - Amplify into posts */}
       <AmplificationButton recordingId={recordingId} transcriptionId={transcription?.id} />
+      {/* Story 5.1 - Create carousel */}
+      <CarouselButton recordingId={recordingId} transcriptionId={transcription?.id} />
     </div>
   )
 }
@@ -306,6 +308,85 @@ function AmplificationButton({ recordingId, transcriptionId }: { recordingId: st
       >
         Amplify into Posts
       </Button>
+    </div>
+  )
+}
+
+/**
+ * Story 5.1: Create Carousel Button
+ * Allows users to create a carousel from their transcription
+ */
+function CarouselButton({ recordingId, transcriptionId }: { recordingId: string; transcriptionId?: string }) {
+  const [isCreating, setIsCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!transcriptionId) {
+    return null
+  }
+
+  const handleCreateCarousel = async () => {
+    setIsCreating(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/suflate/amplify/carousel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          transcriptionId,
+          templateType: 'minimal',
+          slideCount: 7,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create carousel')
+      }
+
+      const data = await response.json()
+
+      // Redirect to carousel editor
+      if (data.carousel) {
+        window.location.href = `/carousel/${data.carousel.id}`
+      } else {
+        setError('Carousel created but no data returned')
+        setIsCreating(false)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create carousel')
+      setIsCreating(false)
+    }
+  }
+
+  return (
+    <div className="pt-4">
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm font-medium text-red-800 mb-1">Error</p>
+          <p className="text-sm text-red-600">{error}</p>
+          <Button
+            onClick={() => setError(null)}
+            variant="outline"
+            size="sm"
+            className="mt-2"
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
+      <Button
+        onClick={handleCreateCarousel}
+        disabled={isCreating}
+        variant="outline"
+        size="lg"
+        className="w-full"
+      >
+        {isCreating ? 'Creating Carousel...' : '🎠 Create Carousel'}
+      </Button>
+      <p className="text-xs text-gray-500 mt-2 text-center">
+        Transform your voice note into a LinkedIn carousel (10 credits)
+      </p>
     </div>
   )
 }

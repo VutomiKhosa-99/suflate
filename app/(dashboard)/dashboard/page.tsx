@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Logo } from '@/components/ui/logo'
-import { Mic, FileText, Calendar, Settings, LogOut, X } from 'lucide-react'
+import { Mic, FileText, Calendar, Settings, X } from 'lucide-react'
 import { useAuth } from '@/lib/auth/auth-context'
 
 export default function DashboardPage() {
-  const { user, loading, signOut } = useAuth()
+  const { user, loading } = useAuth()
   const searchParams = useSearchParams()
   const [notification, setNotification] = useState<string | null>(null)
 
@@ -25,18 +24,18 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div>
       {/* Notification */}
       {notification && (
-        <div className="bg-green-50 border-b border-green-200">
-          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="bg-green-50 border border-green-200 rounded-lg mb-6">
+          <div className="px-4 py-3 flex items-center justify-between">
             <p className="text-green-800 text-sm">{notification}</p>
             <button onClick={() => setNotification(null)} className="text-green-600 hover:text-green-800">
               <X className="w-4 h-4" />
@@ -45,24 +44,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Logo />
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
-              {user?.email}
-            </span>
-            <Button variant="ghost" size="sm" onClick={signOut}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <div>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
             Welcome{user?.user_metadata?.name ? `, ${user.user_metadata.name}` : ''}!
@@ -136,7 +119,7 @@ export default function DashboardPage() {
             </Button>
           </Link>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

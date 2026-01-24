@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
 
 interface RouteParams {
   params: Promise<{ id: string }>
+}
+
+// Service client to bypass RLS for authorized operations
+function getServiceClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
 }
 
 /**
@@ -41,32 +50,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const supabase = await createClient()
+    const supabase = getServiceClient()
 
-    // Verify the post exists and user has access
+    // Verify the post exists and user owns it
     const { data: post, error: postError } = await supabase
       .from('posts')
-      .select('id, workspace_id, status, content')
+      .select('id, workspace_id, status, content, user_id')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single()
 
     if (postError || !post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    }
-
-    // Verify user has access to the workspace
-    const { data: membership } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', post.workspace_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: 'You do not have access to this workspace' },
-        { status: 403 }
-      )
     }
 
     // Check if post is already scheduled
@@ -173,34 +168,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const supabase = await createClient()
+    const supabase = getServiceClient()
 
-    // Get the scheduled post
+    // Get the scheduled post - verify user owns it
     const { data: scheduledPost, error: fetchError } = await supabase
       .from('scheduled_posts')
-      .select('*, posts(workspace_id)')
+      .select('*, posts(workspace_id, user_id)')
       .eq('post_id', id)
+      .eq('user_id', user.id)
       .single()
 
     if (fetchError || !scheduledPost) {
       return NextResponse.json(
         { error: 'Scheduled post not found' },
         { status: 404 }
-      )
-    }
-
-    // Verify user has access to the workspace
-    const { data: membership } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', scheduledPost.workspace_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: 'You do not have access to this workspace' },
-        { status: 403 }
       )
     }
 
@@ -270,34 +251,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = getServiceClient()
 
-    // Get the scheduled post
+    // Get the scheduled post - verify user owns it
     const { data: scheduledPost, error: fetchError } = await supabase
       .from('scheduled_posts')
       .select('*')
       .eq('post_id', id)
+      .eq('user_id', user.id)
       .single()
 
     if (fetchError || !scheduledPost) {
       return NextResponse.json(
         { error: 'Scheduled post not found' },
         { status: 404 }
-      )
-    }
-
-    // Verify user has access to the workspace
-    const { data: membership } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', scheduledPost.workspace_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: 'You do not have access to this workspace' },
-        { status: 403 }
       )
     }
 
@@ -359,34 +326,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = getServiceClient()
 
-    // Get the scheduled post with post details
+    // Get the scheduled post with post details - verify user owns it
     const { data: scheduledPost, error: fetchError } = await supabase
       .from('scheduled_posts')
       .select('*, posts(*)')
       .eq('post_id', id)
+      .eq('user_id', user.id)
       .single()
 
     if (fetchError || !scheduledPost) {
       return NextResponse.json(
         { error: 'Scheduled post not found' },
         { status: 404 }
-      )
-    }
-
-    // Verify user has access to the workspace
-    const { data: membership } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', scheduledPost.workspace_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: 'You do not have access to this workspace' },
-        { status: 403 }
       )
     }
 

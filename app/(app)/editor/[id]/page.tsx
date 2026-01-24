@@ -90,15 +90,21 @@ export default function EditorPage() {
   const lastSavedContent = useRef('')
   const lastSavedTags = useRef<string[]>([])
 
-  // Fetch post data
+  // Fetch post data and LinkedIn status
   useEffect(() => {
-    async function fetchPost() {
+    async function fetchData() {
       try {
-        const response = await fetch(`/api/suflate/posts/${id}`)
-        if (!response.ok) {
-          if (response.status === 404) {
+        // Fetch post and LinkedIn status in parallel
+        const [postResponse, linkedInResponse] = await Promise.all([
+          fetch(`/api/suflate/posts/${id}`),
+          fetch('/api/linkedin/status'),
+        ])
+
+        // Handle post response
+        if (!postResponse.ok) {
+          if (postResponse.status === 404) {
             setError('Post not found')
-          } else if (response.status === 401) {
+          } else if (postResponse.status === 401) {
             router.push('/login')
             return
           } else {
@@ -106,12 +112,18 @@ export default function EditorPage() {
           }
           return
         }
-        const data = await response.json()
-        setPost(data.post)
-        setContent(data.post?.content || '')
-        setTags(data.post?.tags || [])
-        lastSavedContent.current = data.post?.content || ''
-        lastSavedTags.current = data.post?.tags || []
+        const postData = await postResponse.json()
+        setPost(postData.post)
+        setContent(postData.post?.content || '')
+        setTags(postData.post?.tags || [])
+        lastSavedContent.current = postData.post?.content || ''
+        lastSavedTags.current = postData.post?.tags || []
+
+        // Handle LinkedIn status response
+        if (linkedInResponse.ok) {
+          const linkedInData = await linkedInResponse.json()
+          setIsLinkedInConnected(linkedInData.connected)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load post')
       } finally {
@@ -119,7 +131,7 @@ export default function EditorPage() {
       }
     }
 
-    fetchPost()
+    fetchData()
   }, [id, router])
 
   // Auto-save function

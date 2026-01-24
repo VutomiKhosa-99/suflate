@@ -41,11 +41,19 @@ export function SchedulePicker({
   const [time, setTime] = useState('')
   const [showOptimalTimes, setShowOptimalTimes] = useState(true)
 
+  // Helper to format date as YYYY-MM-DD in LOCAL timezone (not UTC)
+  const formatLocalDate = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   // Initialize with existing date if rescheduling
   useEffect(() => {
     if (initialDate) {
       const d = new Date(initialDate)
-      setDate(d.toISOString().split('T')[0])
+      setDate(formatLocalDate(d))
       setTime(d.toTimeString().slice(0, 5))
     }
   }, [initialDate])
@@ -67,23 +75,18 @@ export function SchedulePicker({
 
   const selectOptimalTime = (optimalTime: string) => {
     setTime(optimalTime)
-    // If no date selected, default to tomorrow
-    if (!date) {
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      setDate(tomorrow.toISOString().split('T')[0])
-    }
+    // Don't auto-change the date - let user explicitly select it
   }
 
   const selectQuickDate = (daysFromNow: number) => {
     const newDate = new Date()
     newDate.setDate(newDate.getDate() + daysFromNow)
-    setDate(newDate.toISOString().split('T')[0])
+    setDate(formatLocalDate(newDate))
   }
 
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const minDate = tomorrow.toISOString().split('T')[0]
+  // Allow scheduling for today (API validates time is in future)
+  const today = new Date()
+  const minDate = formatLocalDate(today)
 
   const isOptimalTime = OPTIMAL_TIMES.some(t => t.time === time)
 
@@ -114,6 +117,14 @@ export function SchedulePicker({
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Quick Select</label>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => selectQuickDate(0)}
+            className={date === new Date().toISOString().split('T')[0] ? 'border-blue-500' : ''}
+          >
+            Today
+          </Button>
           <Button
             variant="outline"
             size="sm"

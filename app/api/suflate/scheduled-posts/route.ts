@@ -1,13 +1,22 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+
+// Service client to bypass RLS for authorized operations
+function getServiceClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 /**
  * GET /api/suflate/scheduled-posts
  * Story 4.4: Get scheduled posts for calendar view
  * 
- * Returns all scheduled posts for the user's workspace with optional date range filtering
+ * Returns all scheduled posts for the user with optional date range filtering
  */
 export async function GET(request: NextRequest) {
   try {
@@ -17,50 +26,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = getServiceClient()
     const { searchParams } = new URL(request.url)
     
     // Parse query parameters
-    const workspaceId = searchParams.get('workspaceId')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
     const includePosted = searchParams.get('includePosted') === 'true'
 
-    // Get user's workspace if not specified
-    let targetWorkspaceId = workspaceId
-    if (!targetWorkspaceId) {
-      const { data: membership } = await supabase
-        .from('workspace_members')
-        .select('workspace_id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .single()
-
-      if (!membership) {
-        return NextResponse.json({
-          scheduledPosts: [],
-          count: 0,
-        })
-      }
-      targetWorkspaceId = membership.workspace_id
-    }
-
-    // Verify user has access to workspace
-    const { data: membershipCheck } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', targetWorkspaceId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membershipCheck) {
-      return NextResponse.json(
-        { error: 'You do not have access to this workspace' },
-        { status: 403 }
-      )
-    }
-
-    // Build query
+    // Build query - filter by user_id for security
     let query = supabase
       .from('scheduled_posts')
       .select(`
@@ -75,7 +49,7 @@ export async function GET(request: NextRequest) {
           status
         )
       `)
-      .eq('workspace_id', targetWorkspaceId)
+      .eq('user_id', user.id)
       .order('scheduled_for', { ascending: true })
 
     // Filter by posted status
@@ -115,7 +89,6 @@ export async function GET(request: NextRequest) {
       scheduledPosts: scheduledPosts || [],
       postsByDate,
       count: scheduledPosts?.length || 0,
-      workspaceId: targetWorkspaceId,
     })
   } catch (error) {
     console.error('Fetch scheduled posts error:', error)

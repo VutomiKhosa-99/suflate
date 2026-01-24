@@ -15,6 +15,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   { name: 'Record', href: '/record', icon: '🎤' },
   { name: 'Drafts', href: '/drafts', icon: '📝', enabled: true },
+  { name: 'Carousels', href: '/carousels', icon: '🎠', enabled: true },
   { name: 'Calendar', href: '/calendar', icon: '📅', enabled: true },
   { name: 'Analytics', href: '/analytics', icon: '📈', enabled: false },
   { name: 'Settings', href: '/settings', icon: '⚙️', enabled: true },
@@ -69,10 +70,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-200">
+        {/* Logo - links to dashboard */}
+        <Link href="/dashboard" className="block p-6 border-b border-gray-200 hover:bg-gray-50 transition-colors">
           <Logo size="lg" />
-        </div>
+        </Link>
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
