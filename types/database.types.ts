@@ -17,6 +17,7 @@ export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer'
 export type RecordingStatus = 'uploaded' | 'transcribing' | 'transcribed' | 'failed'
 export type AmplificationStatus = 'processing' | 'completed' | 'failed'
 export type NotificationMethod = 'email' | 'push' | 'both' | 'none'
+export type UserRole = 'individual' | 'ghostwriter' | 'team'
 
 // Workspace posting schedule (Story 4.3)
 export interface PostingSchedule {
@@ -28,6 +29,47 @@ export interface PostingSchedule {
 export interface Database {
   public: {
     Tables: {
+      users: {
+        Row: {
+          id: string
+          email: string
+          name: string | null
+          linkedin_profile_id: string | null
+          linkedin_access_token: string | null
+          linkedin_token_expires_at: string | null
+          subscription_tier: string
+          user_role: UserRole | null
+          onboarding_completed: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email: string
+          name?: string | null
+          linkedin_profile_id?: string | null
+          linkedin_access_token?: string | null
+          linkedin_token_expires_at?: string | null
+          subscription_tier?: string
+          user_role?: UserRole | null
+          onboarding_completed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          name?: string | null
+          linkedin_profile_id?: string | null
+          linkedin_access_token?: string | null
+          linkedin_token_expires_at?: string | null
+          subscription_tier?: string
+          user_role?: UserRole | null
+          onboarding_completed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       workspaces: {
         Row: {
           id: string
@@ -353,6 +395,10 @@ export interface Database {
 }
 
 // Helper types for common use cases
+export type User = Database['public']['Tables']['users']['Row']
+export type UserInsert = Database['public']['Tables']['users']['Insert']
+export type UserUpdate = Database['public']['Tables']['users']['Update']
+
 export type Post = Database['public']['Tables']['posts']['Row']
 export type PostInsert = Database['public']['Tables']['posts']['Insert']
 export type PostUpdate = Database['public']['Tables']['posts']['Update']

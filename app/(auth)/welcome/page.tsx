@@ -94,7 +94,7 @@ export default function WelcomePage() {
               Welcome to Suflate{user?.user_metadata?.name ? `, ${user.user_metadata.name}` : ''}!
             </h1>
             <p className="text-xl text-gray-600">
-              Say it. We'll help you post it.
+              Say it. We&apos;ll help you post it.
             </p>
           </div>
 

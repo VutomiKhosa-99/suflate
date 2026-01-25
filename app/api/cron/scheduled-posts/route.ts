@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { postTextToLinkedIn } from '@/lib/integrations/linkedin'
 
 // Use service role for cron jobs (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -13,8 +14,8 @@ const supabaseAdmin = createClient(
  * Story 4.1, 4.2: Process scheduled posts
  * 
  * This cron job runs every minute (configured in vercel.json)
- * - For company pages: Posts directly to LinkedIn API
- * - For personal profiles: Sends notification email with share link
+ * - Posts directly to LinkedIn API (personal or company page)
+ * - Falls back to notification if LinkedIn not connected
  */
 export async function GET(request: NextRequest) {
   try {
@@ -107,20 +108,95 @@ export async function GET(request: NextRequest) {
             throw new Error(postResult.error || 'LinkedIn API failed')
           }
         } else {
-          // Story 4.2: Send notification for personal profile
-          // Check if notification already sent
-          if (!scheduledPost.notification_sent) {
-            const shareUrl = generateLinkedInShareUrl(post.content)
+          // Story 4.2: Personal profile - try to post directly, fallback to notification
+          
+          // Check if user has LinkedIn connected
+          const { data: userData } = await supabaseAdmin
+            .from('users')
+            .select('linkedin_access_token, linkedin_profile_id, notification_preferences, email, name')
+            .eq('id', user?.id)
+            .single()
+          
+          let postedDirectly = false
+          let linkedInPostId = null
+          let postUrl = null
+          
+          // Try to post directly to LinkedIn
+          if (userData?.linkedin_access_token && userData?.linkedin_profile_id) {
+            console.log(`[Cron] Attempting direct LinkedIn post for scheduled post ${scheduledPost.id}`)
+            const personUrn = `urn:li:person:${userData.linkedin_profile_id}`
             
-            // Send email notification
-            const emailResult = await sendScheduleNotification(
-              user?.email,
-              user?.name || 'there',
-              post.content,
-              shareUrl
+            const result = await postTextToLinkedIn(
+              userData.linkedin_access_token,
+              personUrn,
+              post.content
             )
+            
+            if (result.success) {
+              postedDirectly = true
+              linkedInPostId = result.postId
+              postUrl = result.postUrl
+              console.log(`[Cron] Posted to LinkedIn:`, linkedInPostId)
+            } else {
+              console.log(`[Cron] LinkedIn post failed:`, result.error)
+            }
+          }
+          
+          if (postedDirectly) {
+            // Successfully posted - update records
+            await supabaseAdmin
+              .from('scheduled_posts')
+              .update({
+                posted: true,
+                posted_at: now.toISOString(),
+                linkedin_post_id: linkedInPostId,
+                post_url: postUrl,
+              })
+              .eq('id', scheduledPost.id)
 
-            if (emailResult.success) {
+            await supabaseAdmin
+              .from('posts')
+              .update({
+                status: 'published',
+                updated_at: now.toISOString(),
+              })
+              .eq('id', post.id)
+
+            results.posted++
+          } else {
+            // Fallback: Send notification for manual posting
+            if (!scheduledPost.notification_sent) {
+              const shareUrl = generateLinkedInShareUrl(post.content)
+              
+              const prefs = userData?.notification_preferences || { email: true, push: false }
+              
+              // Send email notification if enabled
+              if (prefs.email) {
+                const emailResult = await sendScheduleNotification(
+                  userData?.email,
+                  userData?.name || 'there',
+                  post.content,
+                  shareUrl
+                )
+                
+                if (!emailResult.success) {
+                  console.warn(`Email notification failed for ${scheduledPost.id}:`, emailResult.error)
+                }
+              }
+              
+              // Send push notification if enabled
+              if (prefs.push) {
+                const pushResult = await sendPushNotifications(
+                  user?.id,
+                  post.content,
+                  post.id
+                )
+                
+                if (!pushResult.success) {
+                  console.warn(`Push notification failed for ${scheduledPost.id}:`, pushResult.error)
+                }
+              }
+
               await supabaseAdmin
                 .from('scheduled_posts')
                 .update({
@@ -130,22 +206,19 @@ export async function GET(request: NextRequest) {
                 .eq('id', scheduledPost.id)
 
               results.notified++
-            } else {
-              throw new Error(emailResult.error || 'Email notification failed')
             }
+
+            // Mark as "posted" after notification
+            await supabaseAdmin
+              .from('scheduled_posts')
+              .update({
+                posted: true,
+                posted_at: now.toISOString(),
+              })
+              .eq('id', scheduledPost.id)
+
+            results.posted++
           }
-
-          // Mark as "posted" for personal profiles after notification
-          // User will manually mark as complete after posting
-          await supabaseAdmin
-            .from('scheduled_posts')
-            .update({
-              posted: true,
-              posted_at: now.toISOString(),
-            })
-            .eq('id', scheduledPost.id)
-
-          results.posted++
         }
       } catch (error) {
         console.error(`Failed to process scheduled post ${scheduledPost.id}:`, error)
@@ -362,4 +435,19 @@ Sent by Suflate • Your voice, amplified
       error: error instanceof Error ? error.message : 'Unknown error',
     }
   }
+}
+
+/**
+ * Send push notifications to all user's subscribed devices
+ * Note: Requires web-push module to be installed
+ */
+async function sendPushNotifications(
+  userId: string | undefined,
+  postContent: string,
+  postId: string
+): Promise<{ success: boolean; error?: string }> {
+  // Push notifications are disabled until web-push is installed
+  // To enable: npm install web-push
+  console.warn('Push notifications disabled - web-push module not installed')
+  return { success: false, error: 'Push notifications not configured' }
 }

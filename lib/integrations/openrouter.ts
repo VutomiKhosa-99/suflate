@@ -149,7 +149,97 @@ Format as JSON array:
   return content
 }
 
+/**
+ * Epic 6: Content Repurposing
+ * Generate LinkedIn posts from repurposed content (blog, tweet, video, PDF)
+ */
+export async function repurposeContent(
+  content: string,
+  options: {
+    sourceType: 'blog' | 'tweet' | 'youtube' | 'pdf'
+    title?: string
+    sourceUrl?: string
+    model?: string
+  }
+) {
+  const model = options.model || 'anthropic/claude-3.5-sonnet'
+  const variationCount = 3 // Repurposed content gets 3 variations
+
+  const sourceTypePrompts: Record<string, string> = {
+    blog: `You are transforming a blog post into LinkedIn content. Extract the key insights and create engaging posts that capture the blog's core message while adapting it for LinkedIn's professional audience.`,
+    tweet: `You are expanding a tweet/short thought into LinkedIn content. Take the core idea and expand it with more context, examples, and depth suitable for LinkedIn's longer format.`,
+    youtube: `You are transforming video content into LinkedIn posts. Extract the key insights, main takeaways, and most valuable points from this video transcript/description.`,
+    pdf: `You are extracting key insights from a document and transforming them into LinkedIn posts. Focus on the most actionable and valuable information.`,
+  }
+
+  const systemPrompt = sourceTypePrompts[options.sourceType]
+
+  const titleContext = options.title ? `\n\nOriginal Title: "${options.title}"` : ''
+  const sourceContext = options.sourceUrl ? `\n\nSource: ${options.sourceUrl}` : ''
+
+  const userPrompt = `Transform this ${options.sourceType} content into ${variationCount} LinkedIn post variations:
+${titleContext}${sourceContext}
+
+Content:
+${content}
+
+Generate ${variationCount} distinct LinkedIn post variations:
+1. Insight-focused: Lead with the most valuable insight
+2. Story/Hook: Start with an engaging hook or story angle
+3. Actionable: Focus on takeaways and what readers can do
+
+Requirements for each variation:
+- 150-300 words (LinkedIn optimal length)
+- Include a strong opening line (hook)
+- Break into readable paragraphs
+- End with a question or call to engagement
+- Use line breaks for readability
+- No hashtags in the main content (add 3-5 relevant hashtags at the end)
+${options.sourceUrl ? `- Reference the original source naturally` : ''}
+
+Format each variation starting with ---VARIATION--- on its own line.`
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      'X-Title': 'Suflate',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 4096,
+      temperature: 0.7,
+    } as OpenRouterRequest),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(`OpenRouter API error: ${error.error?.message || 'Unknown error'}`)
+  }
+
+  const data = await response.json()
+  const rawContent = data.choices[0]?.message?.content || ''
+  
+  // Parse variations from response
+  const variations = rawContent
+    .split('---VARIATION---')
+    .map((v: string) => v.trim())
+    .filter((v: string) => v.length > 50) // Filter out empty or too-short sections
+
+  return {
+    variations: variations.length > 0 ? variations : [rawContent],
+    usage: data.usage,
+  }
+}
+
 export default {
   generatePostVariations,
   generateCarouselContent,
+  repurposeContent,
 }

@@ -127,12 +127,20 @@ function CallbackHandler() {
       }
     }
 
-    const redirectUser = (user: any, defaultNext: string) => {
-      const createdAt = new Date(user.created_at)
-      const now = new Date()
-      const isNewUser = (now.getTime() - createdAt.getTime()) < 60000
-      const destination = isNewUser ? '/welcome' : defaultNext
-      console.log('[Callback Handler] Redirecting to:', destination)
+    const redirectUser = async (user: any, defaultNext: string) => {
+      const supabase = createClient()
+      
+      // Check if user has completed onboarding
+      const { data: userData } = await supabase
+        .from('users')
+        .select('onboarding_completed')
+        .eq('id', user.id)
+        .single()
+
+      // New users or users who haven't completed onboarding go to /onboarding
+      const needsOnboarding = !userData?.onboarding_completed
+      const destination = needsOnboarding ? '/onboarding' : defaultNext
+      console.log('[Callback Handler] Redirecting to:', destination, { needsOnboarding })
       window.location.href = destination
     }
 

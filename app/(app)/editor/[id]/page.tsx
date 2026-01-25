@@ -78,6 +78,7 @@ export default function EditorPage() {
   const [tags, setTags] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved' | 'error'>('saved')
   const [isLinkedInConnected, setIsLinkedInConnected] = useState(false)
   const [showSchedule, setShowSchedule] = useState(false)
@@ -251,22 +252,37 @@ export default function EditorPage() {
   }
 
   const handlePostNow = async () => {
-    if (!isLinkedInConnected) {
-      alert('Please connect LinkedIn first')
-      return
-    }
-
     try {
+      setPublishing(true)
+      
+      // Try to publish directly to LinkedIn
       const response = await fetch(`/api/suflate/posts/${id}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
-      if (!response.ok) throw new Error('Failed to post')
       
-      alert('Posted to LinkedIn!')
-      router.push('/drafts')
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to publish')
+      }
+      
+      if (data.postedDirectly) {
+        // Successfully posted directly to LinkedIn!
+        alert(`✅ Successfully posted to LinkedIn!\n\nYour post is now live.${data.linkedInPostUrl ? `\n\nView it at: ${data.linkedInPostUrl}` : ''}`)
+        router.push('/drafts')
+      } else {
+        // Fallback: Copy to clipboard and open LinkedIn
+        await navigator.clipboard.writeText(content)
+        window.open(data.shareUrl || 'https://www.linkedin.com/feed/?shareActive=true', '_blank')
+        
+        alert('✅ Your post content has been copied to clipboard!\n\n1. LinkedIn is opening in a new tab\n2. Click "Start a post"\n3. Paste (Ctrl+V / Cmd+V) your content\n4. Click "Post"')
+        router.push('/drafts')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to post')
+    } finally {
+      setPublishing(false)
     }
   }
 
@@ -486,14 +502,27 @@ export default function EditorPage() {
           <div className="space-y-4">
             {!showSchedule ? (
               <div className="flex gap-4">
-                <Button onClick={handlePostNow} size="lg" className="flex-1">
-                  Post on LinkedIn
+                <Button 
+                  onClick={handlePostNow} 
+                  size="lg" 
+                  className="flex-1"
+                  disabled={publishing}
+                >
+                  {publishing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    'Post on LinkedIn'
+                  )}
                 </Button>
                 <Button
                   onClick={() => setShowSchedule(true)}
                   variant="outline"
                   size="lg"
                   className="flex-1"
+                  disabled={publishing}
                 >
                   Schedule
                 </Button>

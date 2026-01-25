@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/auth-context";
+import { ServiceWorkerRegistration } from "@/components/features/notifications/service-worker-registration";
 
 export const metadata: Metadata = {
   title: "Suflate - Voice-First LinkedIn Content Creation",
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AuthProvider>{children}</AuthProvider>
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );

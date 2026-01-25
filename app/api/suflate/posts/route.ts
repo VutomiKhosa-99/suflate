@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
 import { randomUUID } from 'crypto'
+
+// Service client to bypass RLS for administrative operations
+function getServiceClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 /**
  * POST /api/suflate/posts
@@ -22,7 +30,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    // Use service client to bypass RLS for post creation
+    const supabase = getServiceClient()
     
     // Parse optional body for initial content
     let initialContent = ''
@@ -44,7 +53,7 @@ export async function POST(request: NextRequest) {
       variationType = 'professional'
     }
 
-    // Get user's workspace
+    // Get user's workspace using service client (bypasses RLS)
     let workspaceId: string | null = null
     
     // First try workspace_members
@@ -81,10 +90,34 @@ export async function POST(request: NextRequest) {
     }
 
     if (!workspaceId) {
-      return NextResponse.json(
-        { error: 'No workspace found. Please set up your workspace first.' },
-        { status: 400 }
-      )
+      // Auto-create workspace for the user if they don't have one
+      const { data: newWorkspace, error: createWsError } = await supabase
+        .from('workspaces')
+        .insert({
+          name: `${user.email?.split('@')[0] || 'My'}'s Workspace`,
+          owner_id: user.id,
+        })
+        .select()
+        .single()
+
+      if (createWsError) {
+        console.error('Failed to create workspace:', createWsError)
+        return NextResponse.json(
+          { error: 'Failed to create workspace. Please try again.' },
+          { status: 500 }
+        )
+      }
+
+      workspaceId = newWorkspace.id
+
+      // Create workspace_members record
+      await supabase
+        .from('workspace_members')
+        .insert({
+          workspace_id: workspaceId,
+          user_id: user.id,
+          role: 'owner',
+        })
     }
 
     // Create the manual draft post
@@ -111,8 +144,15 @@ export async function POST(request: NextRequest) {
 
     if (createError) {
       console.error('Error creating manual draft:', createError)
+      // Check for common database errors
+      if (createError.message?.includes('null value') || createError.code === '23502') {
+        return NextResponse.json(
+          { error: 'Database schema error - transcription_id constraint. Please run migrations.' },
+          { status: 500 }
+        )
+      }
       return NextResponse.json(
-        { error: 'Failed to create draft' },
+        { error: `Failed to create draft: ${createError.message || 'Unknown error'}` },
         { status: 500 }
       )
     }

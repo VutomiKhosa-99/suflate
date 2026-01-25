@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     const includePosted = searchParams.get('includePosted') === 'true'
 
     // Build query - filter by user_id for security
+    // Story 5.7: Include both posts and carousels
     let query = supabase
       .from('scheduled_posts')
       .select(`
@@ -47,6 +48,14 @@ export async function GET(request: NextRequest) {
           source_type,
           variation_type,
           status
+        ),
+        carousels(
+          id,
+          title,
+          slide_data,
+          template_type,
+          status,
+          slide_count
         )
       `)
       .eq('user_id', user.id)

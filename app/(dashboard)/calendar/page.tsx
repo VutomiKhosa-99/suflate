@@ -22,7 +22,9 @@ import { formatDistanceToNow } from 'date-fns'
 
 interface ScheduledPost {
   id: string
-  post_id: string
+  post_id: string | null
+  carousel_id: string | null
+  content_type: 'post' | 'carousel'
   scheduled_for: string
   posted: boolean
   posted_at: string | null
@@ -37,7 +39,15 @@ interface ScheduledPost {
     source_type: string
     variation_type: string
     status: string
-  }
+  } | null
+  carousels: {
+    id: string
+    title: string
+    slide_data: any[]
+    template_type: string
+    status: string
+    slide_count: number
+  } | null
 }
 
 /**
@@ -170,16 +180,21 @@ export default function CalendarPage() {
     return 'Scheduled'
   }
 
-  const handleCancelSchedule = async (postId: string) => {
-    if (!confirm('Are you sure you want to cancel this scheduled post?')) return
+  const handleCancelSchedule = async (contentId: string | null, contentType: 'post' | 'carousel' = 'post') => {
+    if (!contentId) return
+    if (!confirm(`Are you sure you want to cancel this scheduled ${contentType}?`)) return
 
     try {
-      const response = await fetch(`/api/suflate/posts/${postId}/schedule`, {
+      const endpoint = contentType === 'carousel'
+        ? `/api/suflate/carousels/${contentId}/schedule`
+        : `/api/suflate/posts/${contentId}/schedule`
+        
+      const response = await fetch(endpoint, {
         method: 'DELETE',
       })
 
       if (!response.ok) {
-        throw new Error('Failed to cancel scheduled post')
+        throw new Error(`Failed to cancel scheduled ${contentType}`)
       }
 
       // Refresh the calendar
@@ -367,7 +382,7 @@ export default function CalendarPage() {
                   {formatDateDisplay(selectedDate)}
                 </h3>
                 <p className="text-sm text-gray-500">
-                  {getPostsForSelectedDate().length} post{getPostsForSelectedDate().length !== 1 ? 's' : ''} scheduled
+                  {getPostsForSelectedDate().length} item{getPostsForSelectedDate().length !== 1 ? 's' : ''} scheduled
                 </p>
               </div>
               <button
@@ -388,37 +403,55 @@ export default function CalendarPage() {
               </div>
             ) : (
               <div className="space-y-3 overflow-y-auto flex-1">
-                {getPostsForSelectedDate().map(post => (
+                {getPostsForSelectedDate().map(item => (
                   <button
-                    key={post.id}
-                    onClick={() => setSelectedPost(post)}
+                    key={item.id}
+                    onClick={() => setSelectedPost(item)}
                     className="w-full text-left p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${getPostStatusColor(post)}`} />
-                        <span className="text-sm font-medium">{getPostStatusLabel(post)}</span>
+                        <div className={`w-3 h-3 rounded-full ${getPostStatusColor(item)}`} />
+                        <span className="text-sm font-medium">{getPostStatusLabel(item)}</span>
+                        {item.content_type === 'carousel' && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                            🎠 Carousel
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 text-sm text-gray-500">
                         <Clock className="w-4 h-4" />
-                        {new Date(post.scheduled_for).toLocaleTimeString([], { 
+                        {new Date(item.scheduled_for).toLocaleTimeString([], { 
                           hour: '2-digit', 
                           minute: '2-digit' 
                         })}
                       </div>
                     </div>
-                    <p className="text-sm text-gray-700 line-clamp-2">
-                      {post.posts?.content?.slice(0, 150)}
-                      {(post.posts?.content?.length || 0) > 150 && '...'}
-                    </p>
-                    {post.posts?.tags && post.posts.tags.length > 0 && (
-                      <div className="flex gap-1 mt-2 flex-wrap">
-                        {post.posts.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
-                            {tag}
-                          </span>
-                        ))}
+                    {item.content_type === 'carousel' && item.carousels ? (
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {item.carousels.title || 'Untitled Carousel'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {item.carousels.slide_count || item.carousels.slide_data?.length || 0} slides
+                        </p>
                       </div>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-700 line-clamp-2">
+                          {item.posts?.content?.slice(0, 150)}
+                          {(item.posts?.content?.length || 0) > 150 && '...'}
+                        </p>
+                        {item.posts?.tags && item.posts.tags.length > 0 && (
+                          <div className="flex gap-1 mt-2 flex-wrap">
+                            {item.posts.tags.slice(0, 3).map(tag => (
+                              <span key={tag} className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </button>
                 ))}
@@ -470,12 +503,33 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            {/* Post content preview */}
+            {/* Content preview - supports both posts and carousels */}
             <div className="bg-gray-50 rounded-lg p-4 mb-4 max-h-[200px] overflow-y-auto">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                {selectedPost.posts?.content?.slice(0, 500)}
-                {(selectedPost.posts?.content?.length || 0) > 500 && '...'}
-              </p>
+              {selectedPost.content_type === 'carousel' && selectedPost.carousels ? (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                      🎠 Carousel
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {selectedPost.carousels.slide_count || selectedPost.carousels.slide_data?.length || 0} slides
+                    </span>
+                  </div>
+                  <p className="font-medium text-gray-900 mb-1">
+                    {selectedPost.carousels.title || 'Untitled Carousel'}
+                  </p>
+                  {selectedPost.carousels.slide_data?.[0] && (
+                    <p className="text-sm text-gray-600">
+                      {selectedPost.carousels.slide_data[0].title}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {selectedPost.posts?.content?.slice(0, 500)}
+                  {(selectedPost.posts?.content?.length || 0) > 500 && '...'}
+                </p>
+              )}
             </div>
 
             {/* Error message */}
@@ -507,23 +561,34 @@ export default function CalendarPage() {
 
             {/* Actions */}
             <div className="flex gap-2">
-              <Link href={`/editor/${selectedPost.post_id}`} className="flex-1">
+              <Link 
+                href={selectedPost.content_type === 'carousel' 
+                  ? `/carousel/${selectedPost.carousel_id}` 
+                  : `/editor/${selectedPost.post_id}`
+                } 
+                className="flex-1"
+              >
                 <Button variant="outline" className="w-full">
                   <Edit className="w-4 h-4 mr-2" />
-                  Edit Post
+                  Edit {selectedPost.content_type === 'carousel' ? 'Carousel' : 'Post'}
                 </Button>
               </Link>
               {!selectedPost.posted && (
                 <Button
                   variant="outline"
                   className="text-red-600 hover:bg-red-50"
-                  onClick={() => handleCancelSchedule(selectedPost.post_id)}
+                  onClick={() => handleCancelSchedule(
+                    selectedPost.content_type === 'carousel' 
+                      ? selectedPost.carousel_id 
+                      : selectedPost.post_id,
+                    selectedPost.content_type
+                  )}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
               )}
-              {selectedPost.posts?.status === 'published' && (
+              {(selectedPost.posts?.status === 'published' || selectedPost.carousels?.status === 'published') && (
                 <a 
                   href="#" 
                   target="_blank" 

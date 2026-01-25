@@ -1,14 +1,15 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/types/database.types'
 
 // Singleton pattern - ensures same client instance is used
-let browserClient: ReturnType<typeof createSupabaseClient> | null = null
+let browserClient: SupabaseClient<Database> | null = null
 
-export function createClient() {
+export function createClient(): SupabaseClient<Database> {
   if (browserClient) {
     return browserClient
   }
 
-  browserClient = createSupabaseClient(
+  browserClient = createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

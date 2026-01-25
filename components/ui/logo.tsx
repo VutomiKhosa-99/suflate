@@ -4,9 +4,11 @@ interface LogoProps {
   className?: string
   showText?: boolean
   size?: 'sm' | 'md' | 'lg'
+  href?: string
+  asLink?: boolean
 }
 
-export function Logo({ className = '', showText = true, size = 'md' }: LogoProps) {
+export function Logo({ className = '', showText = true, size = 'md', href = '/', asLink = true }: LogoProps) {
   const sizeClasses = {
     sm: 'h-6 w-6',
     md: 'h-8 w-8',
@@ -19,8 +21,8 @@ export function Logo({ className = '', showText = true, size = 'md' }: LogoProps
     lg: 'text-2xl',
   }
 
-  return (
-    <Link href="/" className={`flex items-center gap-2 ${className}`}>
+  const content = (
+    <>
       <div className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center`}>
         <span className="text-white font-bold text-xs">S</span>
       </div>
@@ -29,6 +31,16 @@ export function Logo({ className = '', showText = true, size = 'md' }: LogoProps
           Suflate
         </span>
       )}
+    </>
+  )
+
+  if (!asLink) {
+    return <div className={`flex items-center gap-2 ${className}`}>{content}</div>
+  }
+
+  return (
+    <Link href={href} className={`flex items-center gap-2 ${className}`}>
+      {content}
     </Link>
   )
 }
