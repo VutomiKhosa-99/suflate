@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -52,6 +53,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const supabase = getServiceClient()
 
+    // Ensure selected workspace matches the post's workspace
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
     // Verify the post exists and user owns it
     const { data: post, error: postError } = await supabase
       .from('posts')
@@ -62,6 +67,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     if (postError || !post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+    }
+
+    if (post.workspace_id !== workspaceId) {
+      return NextResponse.json({ error: 'Post does not belong to the selected workspace' }, { status: 403 })
     }
 
     // Check if post is already scheduled

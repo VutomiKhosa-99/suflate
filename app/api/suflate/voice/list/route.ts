@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/utils/supabase/service'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 /**
  * GET /api/suflate/voice/list
@@ -18,18 +19,9 @@ export async function GET(request: NextRequest) {
 
     const serviceClient = createServiceClient()
 
-    // Get user's workspace
-    const { data: membership } = await serviceClient
-      .from('workspace_members')
-      .select('workspace_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .single() as { data: { workspace_id: string } | null }
-
-    if (!membership) {
-      // Return empty array if no workspace
-      return NextResponse.json({ voiceNotes: [] })
-    }
+    // Resolve workspace (cookie or membership/owner). Do NOT create.
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ voiceNotes: [] })
 
     // Fetch voice recordings with transcription status (use service client to bypass RLS)
     const { data: recordings, error } = await serviceClient
@@ -49,7 +41,7 @@ export async function GET(request: NextRequest) {
           detected_content_type
         )
       `)
-      .eq('workspace_id', membership.workspace_id)
+      .eq('workspace_id', workspaceId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false }) as { data: any[] | null; error: any }
 
@@ -82,6 +74,7 @@ export async function GET(request: NextRequest) {
         id: recording.id,
         title,
         summary,
+        has_transcription: (recording.transcriptions && recording.transcriptions.length > 0) || false,
         duration_seconds: recording.duration_seconds,
         status: recording.status,
         created_at: recording.created_at,
@@ -90,12 +83,38 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Fetch any cached transcription errors for these recordings (so UI can display)
+    const recordingIds = voiceNotes.map(v => v.id)
+    let errorMap: Record<string, string> = {}
+    if (recordingIds.length > 0) {
+      try {
+        const keys = recordingIds.map(id => `workspace:${workspaceId}:transcription_error:${id}`)
+        const { data: cacheRows } = await serviceClient
+          .from('cache')
+          .select('cache_key, cache_value')
+          .in('cache_key', keys)
+
+        if (cacheRows) {
+          for (const row of cacheRows) {
+            const keyParts = row.cache_key.split(':')
+            const recId = keyParts[keyParts.length - 1]
+            errorMap[recId] = row.cache_value?.message || ''
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching transcription error cache:', err)
+      }
+    }
+
+    // Attach error messages where present
+    const voiceNotesWithErrors = voiceNotes.map(v => ({ ...v, transcription_error: errorMap[v.id] }))
+
     // Fetch public links that are still pending (no recording uploaded yet)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const { data: publicLinks, error: publicLinksError } = await serviceClient
       .from('public_voice_links')
       .select('*')
-      .eq('workspace_id', membership.workspace_id)
+      .eq('workspace_id', workspaceId)
       .eq('user_id', user.id)
       .eq('status', 'active') // Only active links (not completed)
       .order('created_at', { ascending: false }) as { data: any[] | null; error: any }
@@ -117,7 +136,7 @@ export async function GET(request: NextRequest) {
     }))
 
     // Combine both lists
-    const allNotes = [...voiceNotes, ...publicLinkNotes]
+    const allNotes = [...voiceNotesWithErrors, ...publicLinkNotes]
 
     return NextResponse.json({ voiceNotes: allNotes })
   } catch (error) {

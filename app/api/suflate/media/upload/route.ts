@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 import { randomUUID } from 'crypto'
 
 // Service client to bypass RLS for uploads
@@ -81,11 +82,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate unique file path
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
+    // Generate unique file path (scoped by workspace)
     const fileId = randomUUID()
     const ext = file.name.split('.').pop() || getExtension(file.type)
     const fileName = `${fileId}.${ext}`
-    const filePath = `${user.id}/${config.folder}/${fileName}`
+    const filePath = `${workspaceId}/${user.id}/${config.folder}/${fileName}`
 
     // Convert file to buffer
     const buffer = Buffer.from(await file.arrayBuffer())

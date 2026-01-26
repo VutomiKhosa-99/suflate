@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { postCarouselToLinkedIn } from '@/lib/integrations/linkedin'
 import { getTemplate } from '@/lib/carousel-templates'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 import { jsPDF } from 'jspdf'
 
 /**
@@ -41,6 +42,10 @@ export async function POST(
 
     // Use workspace-scoped LinkedIn credentials
 
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
     // Get the carousel
     const { data: carousel, error: carouselError } = await supabase
       .from('carousels')
@@ -57,6 +62,11 @@ export async function POST(
 
     // Generate the PDF
     const pdfBuffer = await generateCarouselPDF(carousel)
+
+    // Ensure carousel belongs to selected workspace
+    if (carousel.workspace_id !== workspaceId) {
+      return NextResponse.json({ error: 'Carousel does not belong to the selected workspace' }, { status: 403 })
+    }
 
     // Fetch workspace LinkedIn credentials
     const { data: accountData, error: accountError } = await supabase

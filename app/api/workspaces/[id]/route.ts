@@ -147,6 +147,27 @@ export async function DELETE(
     }
 
     // Delete workspace (cascade will handle members, invitations, etc.)
+    // Delete related rows explicitly to avoid orphaned references
+    const relatedTables = [
+      'posts',
+      'voice_recordings',
+      'transcriptions',
+      'drafts',
+      'scheduled_posts',
+      'carousels',
+      'amplification_jobs',
+      'credits',
+      'analytics',
+      'cache',
+      'workspace_linkedin_accounts',
+      'workspace_members'
+    ]
+
+    for (const t of relatedTables) {
+      const { error: delErr } = await supabase.from(t).delete().eq('workspace_id', workspaceId)
+      if (delErr) console.error(`Error deleting from ${t}:`, delErr)
+    }
+
     const { error } = await supabase
       .from('workspaces')
       .delete()

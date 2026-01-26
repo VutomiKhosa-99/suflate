@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 // Helper to get service client
 function getServiceClient() {
@@ -46,57 +47,25 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20', 10)
     const offset = (page - 1) * limit
 
-    // If no workspace ID provided, get user's default workspace
+    // Resolve workspace: prefer explicit query param, otherwise use selected workspace cookie or membership/owner (no creation)
     let targetWorkspaceId = workspaceId
     if (!targetWorkspaceId) {
-      // First try workspace_members table
-      const { data: membership, error: membershipError } = await supabase
-        .from('workspace_members')
-        .select('workspace_id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .single()
+      targetWorkspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    }
 
-      if (membership) {
-        targetWorkspaceId = membership.workspace_id
-      } else {
-        // Fallback: Try to find workspace by owner_id
-        const { data: ownedWorkspace } = await supabase
-          .from('workspaces')
-          .select('id')
-          .eq('owner_id', user.id)
-          .limit(1)
-          .single()
-
-        if (ownedWorkspace) {
-          targetWorkspaceId = ownedWorkspace.id
-          
-          // Create the missing workspace_members record
-          await supabase
-            .from('workspace_members')
-            .insert({
-              workspace_id: ownedWorkspace.id,
-              user_id: user.id,
-              role: 'owner',
-            })
-            .select()
-            .single()
-        } else {
-          // No workspace at all - return empty drafts (user needs to set up workspace)
-          return NextResponse.json({
-            drafts: [],
-            count: 0,
-            page,
-            limit,
-            totalPages: 0,
-            filters: {
-              availableTags: [],
-              sourceTypes: ['voice', 'repurpose_blog', 'repurpose_tweet'],
-              variationTypes: ['professional', 'personal', 'actionable', 'discussion', 'bold'],
-            },
-          })
-        }
-      }
+    if (!targetWorkspaceId) {
+      return NextResponse.json({
+        drafts: [],
+        count: 0,
+        page,
+        limit,
+        totalPages: 0,
+        filters: {
+          availableTags: [],
+          sourceTypes: ['voice', 'repurpose_blog', 'repurpose_tweet'],
+          variationTypes: ['professional', 'personal', 'actionable', 'discussion', 'bold'],
+        },
+      })
     }
 
     // Build base query - use basic columns that always exist
@@ -127,15 +96,13 @@ export async function GET(request: NextRequest) {
           )
         )
       `, { count: 'exact' })
+      .eq('workspace_id', targetWorkspaceId)
       .eq('user_id', user.id)
       .eq('status', status)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
-    // Only filter by workspace if explicitly provided
-    if (workspaceId) {
-      query = query.eq('workspace_id', workspaceId)
-    }
+    // Already filtered by workspace via targetWorkspaceId
 
     // Apply search filter (case-insensitive content search)
     if (search) {
@@ -189,7 +156,7 @@ export async function GET(request: NextRequest) {
       const { data: allTags } = await supabase
         .from('posts')
         .select('tags')
-        .eq('user_id', user.id)
+        .eq('workspace_id', targetWorkspaceId)
         .eq('status', 'draft')
       
       uniqueTags = [...new Set(

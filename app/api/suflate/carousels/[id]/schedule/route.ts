@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -49,23 +50,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
     // Fetch carousel and verify ownership
     const { data: carousel, error: carouselError } = await supabase
       .from('carousels')
       .select('*')
       .eq('id', id)
-      .eq('user_id', user.id)
       .single()
 
     if (carouselError || !carousel) {
       return NextResponse.json({ error: 'Carousel not found' }, { status: 404 })
     }
 
-    // Check if carousel is already scheduled
+    if (carousel.workspace_id !== workspaceId) {
+      return NextResponse.json({ error: 'Carousel does not belong to selected workspace' }, { status: 403 })
+    }
+
+    // Check if carousel is already scheduled (in this workspace)
     const { data: existingSchedule } = await supabase
       .from('scheduled_posts')
       .select('id')
       .eq('carousel_id', id)
+      .eq('workspace_id', workspaceId)
       .single()
 
     if (existingSchedule) {
@@ -81,7 +90,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .insert({
         carousel_id: id,
         post_id: null,
-        workspace_id: carousel.workspace_id,
+        workspace_id: workspaceId,
         user_id: user.id,
         scheduled_for: scheduledDate.toISOString(),
         notification_method: notificationMethod,
@@ -98,11 +107,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Update carousel status
+    // Update carousel status (ensure workspace match)
     await supabase
       .from('carousels')
       .update({ status: 'scheduled' })
       .eq('id', id)
+      .eq('workspace_id', workspaceId)
 
     return NextResponse.json({
       success: true,
@@ -132,12 +142,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const supabase = getServiceClient()
 
-    // Fetch schedule
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
+    // Fetch schedule for this carousel in the workspace
     const { data: schedule, error } = await supabase
       .from('scheduled_posts')
       .select('*')
       .eq('carousel_id', id)
-      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
       .single()
 
     if (error || !schedule) {
@@ -243,12 +257,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const supabase = getServiceClient()
 
-    // Delete schedule
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
+    // Delete schedule for this carousel in the workspace
     const { error: deleteError } = await supabase
       .from('scheduled_posts')
       .delete()
       .eq('carousel_id', id)
-      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
 
     if (deleteError) {
       console.error('Schedule delete error:', deleteError)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -32,6 +33,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const supabase = getServiceClient()
+
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
 
     const { data: post, error } = await supabase
       .from('posts')
@@ -66,7 +71,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         )
       `)
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
       .single()
 
     if (error) {
@@ -158,11 +163,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updateData.status = status
     }
 
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
     const { data: post, error } = await supabase
       .from('posts')
       .update(updateData)
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
       .select()
       .single()
 
@@ -213,11 +222,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     if (hardDelete) {
       // Permanent deletion
+      // Resolve selected workspace (do NOT create)
+      const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+      if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
       const { error } = await supabase
         .from('posts')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
 
       if (error) {
         console.error('Database error deleting post:', error)
@@ -228,6 +241,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       }
     } else {
       // Soft delete - set status to 'deleted'
+      // Resolve selected workspace (do NOT create)
+      const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+      if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
       const { error } = await supabase
         .from('posts')
         .update({
@@ -235,7 +252,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
 
       if (error) {
         console.error('Database error soft-deleting post:', error)

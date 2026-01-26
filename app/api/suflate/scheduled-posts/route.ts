@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 // Service client to bypass RLS for authorized operations
 function getServiceClient() {
@@ -34,7 +35,13 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate')
     const includePosted = searchParams.get('includePosted') === 'true'
 
-    // Build query - filter by user_id for security
+    // Resolve selected workspace and scope results (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) {
+      return NextResponse.json({ scheduledPosts: [], postsByDate: {}, count: 0 })
+    }
+
+    // Build query - filter by workspace_id and user_id for security
     // Story 5.7: Include both posts and carousels
     let query = supabase
       .from('scheduled_posts')
@@ -58,6 +65,7 @@ export async function GET(request: NextRequest) {
           slide_count
         )
       `)
+      .eq('workspace_id', workspaceId)
       .eq('user_id', user.id)
       .order('scheduled_for', { ascending: true })
 

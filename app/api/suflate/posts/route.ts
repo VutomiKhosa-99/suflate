@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 import { randomUUID } from 'crypto'
 
 // Service client to bypass RLS for administrative operations
@@ -53,71 +54,10 @@ export async function POST(request: NextRequest) {
       variationType = 'professional'
     }
 
-    // Get user's workspace using service client (bypasses RLS)
-    let workspaceId: string | null = null
-    
-    // First try workspace_members
-    const { data: membership } = await supabase
-      .from('workspace_members')
-      .select('workspace_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .single()
-
-    if (membership) {
-      workspaceId = membership.workspace_id
-    } else {
-      // Fallback to owned workspace
-      const { data: ownedWorkspace } = await supabase
-        .from('workspaces')
-        .select('id')
-        .eq('owner_id', user.id)
-        .limit(1)
-        .single()
-
-      if (ownedWorkspace) {
-        workspaceId = ownedWorkspace.id
-        
-        // Create missing workspace_members record
-        await supabase
-          .from('workspace_members')
-          .insert({
-            workspace_id: ownedWorkspace.id,
-            user_id: user.id,
-            role: 'owner',
-          })
-      }
-    }
-
+    // Resolve selected workspace (cookie or membership/owner). Do NOT create.
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
     if (!workspaceId) {
-      // Auto-create workspace for the user if they don't have one
-      const { data: newWorkspace, error: createWsError } = await supabase
-        .from('workspaces')
-        .insert({
-          name: `${user.email?.split('@')[0] || 'My'}'s Workspace`,
-          owner_id: user.id,
-        })
-        .select()
-        .single()
-
-      if (createWsError) {
-        console.error('Failed to create workspace:', createWsError)
-        return NextResponse.json(
-          { error: 'Failed to create workspace. Please try again.' },
-          { status: 500 }
-        )
-      }
-
-      workspaceId = newWorkspace.id
-
-      // Create workspace_members record
-      await supabase
-        .from('workspace_members')
-        .insert({
-          workspace_id: workspaceId,
-          user_id: user.id,
-          role: 'owner',
-        })
+      return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
     }
 
     // Create the manual draft post
@@ -187,7 +127,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Use service client to bypass RLS (we filter by user's posts)
+    // Resolve selected workspace (cookie or membership/owner). Do NOT create.
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+    }
+
+    // Use service client to bypass RLS (we filter by workspace)
     const supabase = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -205,11 +151,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Build query - filter by user_id to ensure user only sees their posts
+    // Build query - filter by selected workspace so switching workspace shows different content
     let query = supabase
       .from('posts')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
 
     if (recordingId) {
       // Get posts via transcription_id from recording
@@ -217,6 +163,7 @@ export async function GET(request: NextRequest) {
         .from('transcriptions')
         .select('id')
         .eq('recording_id', recordingId)
+        .eq('workspace_id', workspaceId)
         .single()
 
       if (transcription) {

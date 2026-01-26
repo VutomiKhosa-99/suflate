@@ -94,10 +94,27 @@ export async function DELETE(
     }
 
     // Delete related transcriptions first (cascades to posts)
-    await serviceClient
+    // fetch transcriptions to delete and cascade cleanup
+    const { data: transcriptionRows } = await serviceClient
       .from('transcriptions')
-      .delete()
+      .select('id')
       .eq('recording_id', id)
+
+    const transcriptionIds = (transcriptionRows || []).map(t => t.id)
+
+    if (transcriptionIds.length > 0) {
+      // Delete posts referencing these transcriptions
+      await serviceClient
+        .from('posts')
+        .delete()
+        .in('transcription_id', transcriptionIds)
+
+      // Delete the transcriptions themselves
+      await serviceClient
+        .from('transcriptions')
+        .delete()
+        .in('id', transcriptionIds)
+    }
 
     // Delete the voice recording
     const { error: deleteError } = await serviceClient

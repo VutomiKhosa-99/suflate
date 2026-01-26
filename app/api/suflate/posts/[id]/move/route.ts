@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -35,31 +36,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const supabase = await createClient()
 
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
     // Verify the post exists and get current workspace
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, workspace_id')
       .eq('id', id)
+      .eq('workspace_id', workspaceId)
       .single() as { data: { id: string; workspace_id: string } | null; error: unknown }
 
     if (postError || !post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
     }
 
-    // Verify user has access to source workspace
-    const { data: sourceMembership } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', post.workspace_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!sourceMembership) {
-      return NextResponse.json(
-        { error: 'You do not have access to the source workspace' },
-        { status: 403 }
-      )
-    }
+    // At this point, selected workspace must be the source; membership is enforced by getWorkspaceId
 
     // Verify user has access to target workspace
     const { data: targetMembership } = await supabase

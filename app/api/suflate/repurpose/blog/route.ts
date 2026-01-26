@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { repurposeContent } from '@/lib/integrations/openrouter'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 import { randomUUID } from 'crypto'
 import * as cheerio from 'cheerio'
 
@@ -51,8 +52,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Resolve selected or default workspace
-    const workspaceId = await (await import('@/lib/suflate/workspaces/service')).getOrCreateWorkspaceId(request, { id: user.id, email: user.email })
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+    }
 
     // Fetch the blog content
     let blogHtml: string

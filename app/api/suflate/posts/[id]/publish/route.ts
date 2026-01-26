@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 import { postTextToLinkedIn, generateShareUrl } from '@/lib/integrations/linkedin'
 
 interface RouteParams {
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const supabase = getServiceClient()
 
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
     // Get the post and verify ownership
     const { data: post, error: fetchError } = await supabase
       .from('posts')
@@ -55,6 +60,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { error: 'Cannot publish an empty post' },
         { status: 400 }
       )
+    }
+
+    // Ensure the post belongs to the selected workspace
+    if (post.workspace_id !== workspaceId) {
+      return NextResponse.json({ error: 'Post does not belong to the selected workspace' }, { status: 403 })
     }
 
     // Fetch workspace-level LinkedIn account (if any)

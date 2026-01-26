@@ -105,15 +105,34 @@ export async function POST(request: NextRequest) {
     try {
       transcriptionResult = await transcribeAudioFromUrl(urlData.signedUrl)
     } catch (error) {
-      // Update recording status to 'error'
-      await supabase
-        .from('voice_recordings')
-        .update({ status: 'error' })
-        .eq('id', recordingId)
+      const errMsg = error instanceof Error ? error.message : String(error)
+
+      // Mark recording as failed
+      try {
+        await supabase
+          .from('voice_recordings')
+          .update({ status: 'failed' })
+          .eq('id', recordingId)
+      } catch (err) {
+        console.error('Failed to update recording status to failed:', err)
+      }
+
+      // Persist a short error record in the cache table so the UI can show it
+      try {
+        const cacheKey = `workspace:${recording.workspace_id}:transcription_error:${recordingId}`
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+        await supabase.from('cache').upsert({
+          cache_key: cacheKey,
+          cache_value: { message: errMsg },
+          expires_at: expiresAt
+        })
+      } catch (err) {
+        console.error('Failed to persist transcription error to cache:', err)
+      }
 
       console.error('AssemblyAI transcription error:', error)
       return NextResponse.json(
-        { error: 'Failed to transcribe audio: ' + (error instanceof Error ? error.message : 'Unknown error') },
+        { error: 'Failed to transcribe audio', details: errMsg },
         { status: 500 }
       )
     }

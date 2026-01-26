@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 import { getTemplate } from '@/lib/carousel-templates'
 import { jsPDF } from 'jspdf'
 
@@ -35,16 +36,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const supabase = getServiceClient()
 
-    // Fetch carousel with user ownership check
+    // Resolve selected workspace (do NOT create)
+    const workspaceId = await getWorkspaceId(request, { id: user.id, email: user.email })
+    if (!workspaceId) return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
+
+    // Fetch carousel
     const { data: carousel, error: fetchError } = await supabase
       .from('carousels')
       .select('*')
       .eq('id', id)
-      .eq('user_id', user.id)
       .single()
 
     if (fetchError || !carousel) {
       return NextResponse.json({ error: 'Carousel not found' }, { status: 404 })
+    }
+
+    if (carousel.workspace_id !== workspaceId) {
+      return NextResponse.json({ error: 'Carousel does not belong to selected workspace' }, { status: 403 })
     }
 
     const template = getTemplate(carousel.template_type)
@@ -67,7 +75,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .slice(0, 50)
     const fileName = `${safeTitle}-${id.slice(0, 8)}.pdf`
 
-    // Update carousel status
+    // Update carousel status (ensure workspace match)
     await supabase
       .from('carousels')
       .update({
@@ -75,6 +83,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         status: 'ready',
       })
       .eq('id', id)
+      .eq('workspace_id', workspaceId)
 
     // Return PDF as downloadable file
     return new NextResponse(pdfBuffer, {

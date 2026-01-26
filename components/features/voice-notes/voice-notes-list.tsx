@@ -13,6 +13,7 @@ export interface VoiceNote {
   status: 'uploaded' | 'transcribing' | 'transcribed' | 'processing' | 'complete' | 'error' | 'pending'
   created_at: string
   storage_path?: string
+  has_transcription?: boolean
   type: 'recording' | 'public_link'
   public_link?: string
   questions?: string
@@ -81,8 +82,9 @@ export function VoiceNotesList({ voiceNotes, onNoteClick, onEditLink, onDeleteLi
     note.status === 'transcribed' || note.status === 'complete'
   )
   const processing = recordings.filter(note => 
-    note.status === 'uploaded' || note.status === 'transcribing' || note.status === 'processing'
+    note.status === 'transcribing' || note.status === 'processing'
   )
+  const pendingTranscription = recordings.filter(note => !note.has_transcription && note.type === 'recording')
 
   if (isLoading) {
     return (
@@ -200,6 +202,54 @@ export function VoiceNotesList({ voiceNotes, onNoteClick, onEditLink, onDeleteLi
                   <AlertTriangle className="w-3 h-3" />
                   Pending Recording
                 </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pending Transcription Section (recordings without a transcription) */}
+      {pendingTranscription.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900">Pending Transcription</h3>
+          {pendingTranscription.map((note) => (
+            <div
+              key={note.id}
+              className="bg-white rounded-xl border border-gray-200 p-4 hover:border-orange-200 hover:shadow-sm transition-all cursor-pointer"
+              onClick={() => onNoteClick(note.id)}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-5 h-5 text-orange-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-gray-900">
+                    {note.title || 'Pending transcription...'}
+                  </h4>
+                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                    {note.duration_seconds && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        {Math.floor(note.duration_seconds / 60)}:{(note.duration_seconds % 60).toString().padStart(2, '0')}
+                      </span>
+                    )}
+                    <span>{formatDate(note.created_at)}</span>
+                  </div>
+                </div>
+                {onDeleteNote && (
+                  <button
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (confirm('Delete this voice note? This will also delete any generated posts.')) {
+                        onDeleteNote(note.id)
+                      }
+                    }}
+                    title="Delete voice note"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

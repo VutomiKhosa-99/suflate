@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { getWorkspaceId } from '@/lib/suflate/workspaces/service'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_MIME_TYPES = [
@@ -58,67 +59,12 @@ export async function POST(request: NextRequest) {
     // Create supabase client for database operations
     const supabase = await createClient()
 
-    // Get user's default workspace - Epic 2
+    // Resolve selected workspace (cookie or membership/owner). Do NOT create.
     const userId = user.id
-    
-    // Get user's default workspace
-    let { data: workspace, error: workspaceError } = await supabase
-      .from('workspaces')
-      .select('id')
-      .eq('owner_id', userId)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single() as { data: { id: string } | null; error: unknown }
-
-    // If no workspace exists, create one (fallback for users created before trigger)
-    // Use service client to bypass RLS for admin operations
-    if (workspaceError || !workspace) {
-      const serviceClient = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
-      )
-
-      // First, ensure user exists in public.users table (for users created before trigger)
-      await serviceClient
-        .from('users')
-        .upsert({
-          id: userId,
-          email: user.email,
-          name: user.user_metadata?.name || user.email?.split('@')[0],
-        }, { onConflict: 'id' })
-
-      const { data: newWorkspace, error: createError } = await serviceClient
-        .from('workspaces')
-        .insert({
-          name: `${user.email?.split('@')[0]}'s Workspace`,
-          owner_id: userId,
-          plan: 'starter',
-          credits_remaining: 100,
-          credits_total: 100,
-        })
-        .select('id')
-        .single()
-
-      if (createError || !newWorkspace) {
-        console.error('Failed to create workspace:', createError)
-        return NextResponse.json(
-          { error: 'Failed to create workspace. Please contact support.' },
-          { status: 500 }
-        )
-      }
-
-      workspace = newWorkspace
-
-      // Also add user as workspace member (using service client to bypass RLS)
-      await serviceClient.from('workspace_members').insert({
-        workspace_id: workspace.id,
-        user_id: userId,
-        role: 'owner',
-      })
+    const workspaceId = await getWorkspaceId(request, { id: userId, email: user.email })
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'No workspace selected' }, { status: 400 })
     }
-
-    const workspaceId = workspace.id
 
     const recordingId = randomUUID()
     const timestamp = Date.now()

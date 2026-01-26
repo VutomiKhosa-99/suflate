@@ -74,6 +74,50 @@ export async function getOrCreateWorkspaceId(request: NextRequest, user: { id: s
   return workspace.id as string
 }
 
+/**
+ * Get selected workspace from cookie or membership/ownership without creating one.
+ * Returns `string | null`.
+ */
+export async function getWorkspaceId(request: NextRequest, user: { id: string; email?: string | null }) {
+  const supabase = getServiceClient()
+
+  const cookie = request.cookies.get('selected_workspace_id')?.value
+  if (cookie) {
+    const { data: membership } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
+      .eq('workspace_id', cookie)
+      .eq('user_id', user.id)
+      .single()
+    if (membership?.workspace_id) {
+      return membership.workspace_id as string
+    }
+  }
+
+  // Try to find any workspace membership for the user
+  const { data: anyMembership } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
+    .eq('user_id', user.id)
+    .limit(1)
+    .single()
+
+  if (anyMembership?.workspace_id) return anyMembership.workspace_id as string
+
+  // Fallback to first owned workspace, but do NOT create one
+  const { data: ownedWorkspace } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('owner_id', user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single()
+
+  if (ownedWorkspace?.id) return ownedWorkspace.id as string
+
+  return null
+}
+
 export async function listUserWorkspaces(userId: string) {
   const supabase = getServiceClient()
   const { data } = await supabase
