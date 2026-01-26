@@ -40,6 +40,7 @@ export interface Database {
           subscription_tier: string
           user_role: UserRole | null
           onboarding_completed: boolean
+          feature_tour_completed: boolean
           created_at: string
           updated_at: string
         }
@@ -53,6 +54,7 @@ export interface Database {
           subscription_tier?: string
           user_role?: UserRole | null
           onboarding_completed?: boolean
+          feature_tour_completed?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -66,6 +68,7 @@ export interface Database {
           subscription_tier?: string
           user_role?: UserRole | null
           onboarding_completed?: boolean
+          feature_tour_completed?: boolean
           created_at?: string
           updated_at?: string
         }

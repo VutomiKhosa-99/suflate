@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/ui/logo'
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const [verifying, setVerifying] = useState(false)
   const [verified, setVerified] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,12 +40,13 @@ export default function VerifyEmailPage() {
     checkVerification()
 
     // Check for email confirmation token in URL
-    const token = searchParams.get('token')
-    const type = searchParams.get('type')
+    const token = searchParams?.get('token')
+    const type = searchParams?.get('type')
 
     if (token && type === 'signup') {
       verifyEmailToken(token)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, searchParams])
 
   const verifyEmailToken = async (token: string) => {
@@ -205,5 +206,31 @@ export default function VerifyEmailPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      <header className="border-b border-gray-100">
+        <div className="container mx-auto px-4 py-4">
+          <Logo />
+        </div>
+      </header>
+      <main className="flex-1 flex items-center justify-center px-4 py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <VerifyEmailContent />
+    </Suspense>
   )
 }

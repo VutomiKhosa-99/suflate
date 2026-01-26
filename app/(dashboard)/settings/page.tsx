@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth/auth-context'
+import { useSearchParams } from 'next/navigation'
 import { Logo } from '@/components/ui/logo'
 import { Button } from '@/components/ui/button'
 import { LinkedInSettings } from '@/components/features/linkedin/linkedin-settings'
@@ -12,14 +13,24 @@ import { WorkspaceMembers } from '@/components/workspace/workspace-members'
 import { WorkspaceBranding } from '@/components/workspace/workspace-branding'
 import { WorkspaceCredits } from '@/components/workspace/workspace-credits'
 import Link from 'next/link'
-import { ArrowLeft, Building2, Users, Palette, CreditCard, Link2, User, Bell } from 'lucide-react'
+import { ArrowLeft, Building2, Users, Palette, CreditCard, Link2, User, Bell, Settings, ChevronRight, AlertCircle } from 'lucide-react'
 
 type TabId = 'account' | 'workspace' | 'team' | 'branding' | 'credits' | 'connections' | 'notifications'
 
 export default function SettingsPage() {
   const { user, loading } = useAuth()
+  const searchParams = useSearchParams()
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('account')
+  const [showHeadlinePrompt, setShowHeadlinePrompt] = useState(false)
+
+  // Check if we need to prompt for headline
+  useEffect(() => {
+    if (searchParams?.get('needs_headline') === 'true') {
+      setActiveTab('connections')
+      setShowHeadlinePrompt(true)
+    }
+  }, [searchParams])
 
   // Load selected workspace from cookie or first workspace
   useEffect(() => {
@@ -50,181 +61,233 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
       </div>
     )
   }
 
   const tabs = [
-    { id: 'account' as const, label: 'Account', icon: User },
-    { id: 'workspace' as const, label: 'Workspace', icon: Building2 },
-    { id: 'team' as const, label: 'Team', icon: Users },
-    { id: 'branding' as const, label: 'Branding', icon: Palette },
-    { id: 'credits' as const, label: 'Credits', icon: CreditCard },
-    { id: 'connections' as const, label: 'Connections', icon: Link2 },
-    { id: 'notifications' as const, label: 'Notifications', icon: Bell },
+    { id: 'account' as const, label: 'Account', icon: User, description: 'Manage your profile and subscription' },
+    { id: 'workspace' as const, label: 'Workspace', icon: Building2, description: 'Configure workspace settings' },
+    { id: 'team' as const, label: 'Team', icon: Users, description: 'Invite and manage team members' },
+    { id: 'branding' as const, label: 'Branding', icon: Palette, description: 'Customize your brand appearance' },
+    { id: 'credits' as const, label: 'Credits', icon: CreditCard, description: 'View usage and purchase credits' },
+    { id: 'connections' as const, label: 'Connections', icon: Link2, description: 'Connect your LinkedIn account' },
+    { id: 'notifications' as const, label: 'Notifications', icon: Bell, description: 'Configure notification preferences' },
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Logo />
-            {selectedWorkspaceId && (
-              <WorkspaceSelector
-                selectedWorkspaceId={selectedWorkspaceId}
-                onWorkspaceChange={setSelectedWorkspaceId}
-              />
-            )}
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* Supergrow-style Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center">
+              <Settings className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
           </div>
-          <Link href="/dashboard">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <p className="text-gray-500">Manage your account, workspace, and preferences</p>
         </div>
-      </header>
+        <Link href="/dashboard">
+          <Button variant="outline" className="border-gray-200 hover:border-orange-300">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </Button>
+        </Link>
+      </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-600 mt-1">Manage your account, workspace, and team</p>
-        </div>
-
-        <div className="flex gap-8">
-          {/* Sidebar Tabs */}
-          <div className="w-48 flex-shrink-0">
+      <div className="flex gap-6">
+        {/* Supergrow-style Sidebar Tabs */}
+        <div className="w-64 flex-shrink-0">
+          <div className="bg-white rounded-xl border border-gray-200 p-2">
             <nav className="space-y-1">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all group
                     ${activeTab === tab.id
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? 'bg-orange-50 text-orange-600 border border-orange-200'
+                      : 'text-gray-600 hover:bg-gray-50'
                     }`}
                 >
-                  <tab.icon className="w-5 h-5" />
-                  {tab.label}
+                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-orange-500' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                  <span className="flex-1 text-left">{tab.label}</span>
+                  {activeTab === tab.id && (
+                    <ChevronRight className="w-4 h-4 text-orange-400" />
+                  )}
                 </button>
               ))}
             </nav>
           </div>
 
-          {/* Content Area */}
-          <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6">
-            {/* Account Tab */}
-            {activeTab === 'account' && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Account</h2>
-                  <div className="p-4 bg-gray-50 rounded-lg">
+          {/* Workspace Selector */}
+          {selectedWorkspaceId && (
+            <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Current Workspace</p>
+              <WorkspaceSelector
+                selectedWorkspaceId={selectedWorkspaceId}
+                onWorkspaceChange={setSelectedWorkspaceId}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Content Area - Supergrow style */}
+        <div className="flex-1">
+          <div className="bg-white rounded-xl border border-gray-200">
+            {/* Tab Header */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const currentTab = tabs.find(t => t.id === activeTab)
+                  if (currentTab) {
+                    return (
+                      <>
+                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <currentTab.icon className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-semibold text-gray-900">{currentTab.label}</h2>
+                          <p className="text-sm text-gray-500">{currentTab.description}</p>
+                        </div>
+                      </>
+                    )
+                  }
+                  return null
+                })()}
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Account Tab */}
+              {activeTab === 'account' && (
+                <div className="space-y-6">
+                  <div className="p-5 bg-gray-50 rounded-xl border border-gray-200">
                     <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 font-semibold text-2xl">
+                      <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+                        <span className="text-white font-bold text-2xl">
                           {user?.email?.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900 text-lg">
+                        <p className="font-semibold text-gray-900 text-lg">
                           {user?.user_metadata?.name || user?.email?.split('@')[0]}
                         </p>
                         <p className="text-gray-500">{user?.email}</p>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div>
-                  <h3 className="text-md font-semibold text-gray-900 mb-3">Subscription</h3>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-gray-900">Starter Plan</p>
-                        <p className="text-sm text-gray-500">100 credits per month</p>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Subscription Plan</h3>
+                    <div className="p-5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-900">Starter Plan</p>
+                            <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-xs font-medium rounded-full">Active</span>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">100 credits per month</p>
+                        </div>
+                        <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+                          Upgrade Plan
+                        </Button>
                       </div>
-                      <Button variant="outline" disabled>
-                        Upgrade (Coming Soon)
-                      </Button>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Workspace Tab */}
-            {activeTab === 'workspace' && selectedWorkspaceId && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Workspace Settings</h2>
-                  <p className="text-gray-600 text-sm mb-4">
-                    Manage your workspace name and settings. Create separate workspaces for different clients or projects.
-                  </p>
+              {/* Workspace Tab */}
+              {activeTab === 'workspace' && selectedWorkspaceId && (
+                <div className="space-y-6">
+                  {/* Current Workspace Management */}
+                  <ManageWorkspaceForm 
+                    workspaceId={selectedWorkspaceId} 
+                    onDeleted={() => {
+                      setSelectedWorkspaceId(null)
+                      window.location.reload()
+                    }}
+                  />
+                  
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-blue-900 mb-1">Agency Tip</h3>
+                        <p className="text-blue-700 text-sm">
+                          Create a separate workspace for each client to keep their content, branding, and team access isolated.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Create New Workspace</h3>
+                    <CreateWorkspaceForm onCreated={(id) => setSelectedWorkspaceId(id)} />
+                  </div>
                 </div>
+              )}
 
-                {/* Current Workspace Management */}
-                <ManageWorkspaceForm 
-                  workspaceId={selectedWorkspaceId} 
-                  onDeleted={() => {
-                    // Reset to first available workspace after deletion
-                    setSelectedWorkspaceId(null)
-                    window.location.reload()
-                  }}
-                />
+              {/* Team Tab */}
+              {activeTab === 'team' && selectedWorkspaceId && (
+                <WorkspaceMembers workspaceId={selectedWorkspaceId} />
+              )}
+
+              {/* Branding Tab */}
+              {activeTab === 'branding' && selectedWorkspaceId && (
+                <WorkspaceBranding workspaceId={selectedWorkspaceId} />
+              )}
+
+              {/* Credits Tab */}
+              {activeTab === 'credits' && selectedWorkspaceId && (
+                <WorkspaceCredits workspaceId={selectedWorkspaceId} />
+              )}
+
+              {/* Connections Tab */}
+              {activeTab === 'connections' && (
+                <div className="space-y-8">
+                  {/* Headline prompt when redirected from OAuth */}
+                  {showHeadlinePrompt && (
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-orange-900">LinkedIn connected successfully!</h4>
+                          <p className="text-sm text-orange-700 mt-1">
+                            We couldn&apos;t fetch your headline automatically. Please enter it below so it appears in your post previews.
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => setShowHeadlinePrompt(false)}
+                          className="text-orange-400 hover:text-orange-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <h3 className="font-medium text-blue-900 mb-2">Agency Tip</h3>
-                  <p className="text-blue-700 text-sm">
-                    Create a separate workspace for each client to keep their content, branding, and team access isolated.
-                    Use the workspace selector in the header to quickly switch between clients.
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-4">LinkedIn Personal Profile</h3>
+                    {user && <LinkedInSettings userId={user.id} />}
+                  </div>
+                  
+                  <hr className="border-gray-200" />
+                  
+                  <LinkedInCompanyPages />
                 </div>
+              )}
 
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-3">Create New Workspace</h3>
-                  <CreateWorkspaceForm onCreated={(id) => setSelectedWorkspaceId(id)} />
-                </div>
-              </div>
-            )}
-
-            {/* Team Tab */}
-            {activeTab === 'team' && selectedWorkspaceId && (
-              <WorkspaceMembers workspaceId={selectedWorkspaceId} />
-            )}
-
-            {/* Branding Tab */}
-            {activeTab === 'branding' && selectedWorkspaceId && (
-              <WorkspaceBranding workspaceId={selectedWorkspaceId} />
-            )}
-
-            {/* Credits Tab */}
-            {activeTab === 'credits' && selectedWorkspaceId && (
-              <WorkspaceCredits workspaceId={selectedWorkspaceId} />
-            )}
-
-            {/* Connections Tab */}
-            {activeTab === 'connections' && (
-              <div className="space-y-8">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">LinkedIn Personal Profile</h2>
-                  {user && <LinkedInSettings userId={user.id} />}
-                </div>
-                
-                <hr className="border-gray-200" />
-                
-                <LinkedInCompanyPages />
-              </div>
-            )}
-
-            {/* Notifications Tab */}
-            {activeTab === 'notifications' && (
-              <NotificationSettings />
-            )}
+              {/* Notifications Tab */}
+              {activeTab === 'notifications' && (
+                <NotificationSettings />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -273,9 +336,13 @@ function CreateWorkspaceForm({ onCreated }: { onCreated: (id: string) => void })
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Client or project name"
-        className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
       />
-      <Button type="submit" disabled={creating || !name.trim()}>
+      <Button 
+        type="submit" 
+        disabled={creating || !name.trim()}
+        className="bg-orange-500 hover:bg-orange-600 text-white"
+      >
         {creating ? 'Creating...' : 'Create Workspace'}
       </Button>
       {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
@@ -370,19 +437,24 @@ function ManageWorkspaceForm({ workspaceId, onDeleted }: { workspaceId: string; 
   }
 
   if (loading) {
-    return <div className="animate-pulse h-32 bg-gray-100 rounded-lg" />
+    return <div className="animate-pulse h-32 bg-gray-100 rounded-xl" />
   }
 
   const canEdit = ['owner', 'admin'].includes(role)
   const canDelete = role === 'owner'
 
   return (
-    <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-4">
-      <h3 className="font-medium text-gray-900">Current Workspace</h3>
+    <div className="p-5 bg-white border border-gray-200 rounded-xl space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-gray-900">Current Workspace</h3>
+        <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full capitalize">
+          {role}
+        </span>
+      </div>
       
       <form onSubmit={handleSave} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Workspace Name
           </label>
           <input
@@ -390,45 +462,46 @@ function ManageWorkspaceForm({ workspaceId, onDeleted }: { workspaceId: string; 
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={!canEdit}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-500"
           />
         </div>
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-        {success && <p className="text-green-600 text-sm">Workspace updated successfully!</p>}
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600">
+            Workspace updated successfully!
+          </div>
+        )}
 
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-500">
-            Your role: <span className="font-medium capitalize">{role}</span>
-          </div>
-          
-          <div className="flex gap-3">
-            {canEdit && (
-              <Button
-                type="submit"
-                disabled={saving || !name.trim() || name === originalName}
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            )}
-          </div>
-        </div>
+        {canEdit && (
+          <Button
+            type="submit"
+            disabled={saving || !name.trim() || name === originalName}
+            className="bg-orange-500 hover:bg-orange-600 text-white"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        )}
       </form>
 
       {/* Delete Section */}
       {canDelete && (
         <div className="pt-4 border-t border-gray-200">
-          <h4 className="font-medium text-red-600 mb-2">Danger Zone</h4>
+          <h4 className="text-sm font-semibold text-red-600 mb-3">Danger Zone</h4>
           {!showDeleteConfirm ? (
             <Button
               variant="outline"
               onClick={() => setShowDeleteConfirm(true)}
-              className="text-red-600 border-red-300 hover:bg-red-50"
+              className="border-red-200 text-red-600 hover:bg-red-50"
             >
               Delete Workspace
             </Button>
           ) : (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg space-y-3">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-3">
               <p className="text-sm text-red-700">
                 Are you sure you want to delete this workspace? This action cannot be undone.
                 All content, members, and settings will be permanently deleted.
@@ -445,6 +518,7 @@ function ManageWorkspaceForm({ workspaceId, onDeleted }: { workspaceId: string; 
                   variant="outline"
                   onClick={() => setShowDeleteConfirm(false)}
                   disabled={deleting}
+                  className="border-gray-200"
                 >
                   Cancel
                 </Button>

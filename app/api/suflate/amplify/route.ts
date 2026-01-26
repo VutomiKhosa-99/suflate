@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { generatePostVariations } from '@/lib/integrations/openrouter'
+import { generatePostVariations, VariationType } from '@/lib/integrations/openrouter'
 import { randomUUID } from 'crypto'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
 
 /**
  * POST /api/suflate/amplify
- * Story 1.5: Amplify Voice Note into 5 Post Variations
+ * Story 1.5: Amplify Voice Note into Post Variations
  * 
- * Generates 5 LinkedIn post variations from a transcribed voice note
- * - Fetches transcription from database
- * - Calls OpenRouter API with voice preservation prompts
- * - Creates 5 post records with different variation types
- * - Creates amplification_jobs record to track processing
+ * Generates LinkedIn post variations from a transcribed voice note
+ * - If variationType is provided: generates 3 variations of that type
+ * - If no variationType: generates 5 variations (one of each type)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -32,11 +30,20 @@ export async function POST(request: NextRequest) {
     )
 
     const body = await request.json()
-    const { transcriptionId } = body
+    const { transcriptionId, variationType, replaceExisting = true } = body
 
     if (!transcriptionId) {
       return NextResponse.json(
         { error: 'transcriptionId is required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate variationType if provided
+    const validTypes: VariationType[] = ['professional', 'personal', 'actionable', 'discussion', 'bold']
+    if (variationType && !validTypes.includes(variationType)) {
+      return NextResponse.json(
+        { error: 'Invalid variationType. Must be one of: professional, personal, actionable, discussion, bold' },
         { status: 400 }
       )
     }
@@ -71,6 +78,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Delete existing posts of this type before creating new ones (default behavior)
+    if (replaceExisting) {
+      if (variationType) {
+        // Delete only posts of the specific variation type
+        await supabase
+          .from('posts')
+          .delete()
+          .eq('transcription_id', transcriptionId)
+          .eq('user_id', user.id)
+          .eq('variation_type', variationType)
+          .eq('status', 'draft') // Only delete drafts, not published/scheduled
+        
+        console.log(`[Amplify] Deleted existing ${variationType} drafts for transcription ${transcriptionId}`)
+      } else {
+        // Delete all draft posts for this transcription (when generating all 5 types)
+        await supabase
+          .from('posts')
+          .delete()
+          .eq('transcription_id', transcriptionId)
+          .eq('user_id', user.id)
+          .eq('status', 'draft') // Only delete drafts, not published/scheduled
+        
+        console.log(`[Amplify] Deleted all existing drafts for transcription ${transcriptionId}`)
+      }
+    }
+
     // Use processed_text if available, otherwise raw_text
     const transcriptText = transcription.processed_text || transcription.raw_text
 
@@ -84,6 +117,7 @@ export async function POST(request: NextRequest) {
     // Create amplification_jobs record to track processing
     const jobId = randomUUID()
     const workspaceId = transcription.workspace_id
+    const expectedVariationCount = variationType ? 3 : 5
     
     if (!workspaceId) {
       return NextResponse.json(
@@ -98,7 +132,7 @@ export async function POST(request: NextRequest) {
       transcription_id: transcriptionId,
       recording_id: transcription.recording_id,
       status: 'processing',
-      variation_count: 5,
+      variation_count: expectedVariationCount,
       started_at: new Date().toISOString(),
     })
 
@@ -106,7 +140,8 @@ export async function POST(request: NextRequest) {
     let amplificationResult
     try {
       amplificationResult = await generatePostVariations(transcriptText, {
-        variationCount: 5,
+        variationCount: expectedVariationCount,
+        variationType: variationType as VariationType | undefined,
         contentType: transcription.detected_content_type as any,
       })
     } catch (error) {
@@ -144,7 +179,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Map variations to variation types
-    const variationTypes: Array<'professional' | 'personal' | 'actionable' | 'discussion' | 'bold'> = [
+    // If specific type requested, all variations get that type
+    // Otherwise, each gets a different type
+    const allVariationTypes: Array<'professional' | 'personal' | 'actionable' | 'discussion' | 'bold'> = [
       'professional',
       'personal',
       'actionable',
@@ -156,9 +193,11 @@ export async function POST(request: NextRequest) {
     const posts: any[] = []
     const errors: any[] = []
 
-    for (let i = 0; i < Math.min(variations.length, 5); i++) {
+    const maxVariations = variationType ? 3 : 5
+    for (let i = 0; i < Math.min(variations.length, maxVariations); i++) {
       const variationText = variations[i]
-      const variationType = variationTypes[i] || 'professional'
+      // If specific type, all get that type; otherwise, cycle through types
+      const postVariationType = variationType || allVariationTypes[i] || 'professional'
 
       const postId = randomUUID()
 
@@ -171,7 +210,7 @@ export async function POST(request: NextRequest) {
           transcription_id: transcriptionId,
           source_type: 'voice',
           content: variationText,
-          variation_type: variationType,
+          variation_type: postVariationType,
           status: 'draft',
         })
         .select()

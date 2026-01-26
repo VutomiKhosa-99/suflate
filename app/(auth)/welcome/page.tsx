@@ -3,18 +3,19 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { OnboardingModal } from '@/components/features/onboarding/onboarding-modal'
+import { FeatureTour } from '@/components/features/onboarding/feature-tour'
 import { Logo } from '@/components/ui/logo'
 import { Mic, Sparkles, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 /**
- * Welcome page shown after email verification
+ * Welcome page shown after onboarding role selection
+ * Shows feature tour, then welcome content
  * Story 2.5: Onboarding Tutorial
  */
 export default function WelcomePage() {
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [showFeatureTour, setShowFeatureTour] = useState(false)
+  const [user, setUser] = useState<{ id: string; user_metadata?: { name?: string } } | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
@@ -29,31 +30,39 @@ export default function WelcomePage() {
       }
 
       setUser(user)
-      setLoading(false)
 
-      // Check if user has completed onboarding
-      const onboardingCompleted = localStorage.getItem(`onboarding_completed_${user.id}`)
-      if (!onboardingCompleted) {
-        setShowOnboarding(true)
+      // Check if user has completed the feature tour from database
+      const { data: userData } = await supabase
+        .from('users')
+        .select('feature_tour_completed')
+        .eq('id', user.id)
+        .single()
+
+      const tourCompleted = userData && (userData as { feature_tour_completed?: boolean }).feature_tour_completed
+      if (!tourCompleted) {
+        setShowFeatureTour(true)
       }
+      
+      setLoading(false)
     }
 
     checkUser()
   }, [router])
 
-  const handleOnboardingComplete = () => {
+  const handleTourComplete = async () => {
     if (user) {
-      localStorage.setItem(`onboarding_completed_${user.id}`, 'true')
+      // Save to database
+      const supabase = createClient()
+      // Type assertion needed for dynamic table access
+      await (supabase as unknown as { from: (table: string) => { update: (data: Record<string, unknown>) => { eq: (col: string, val: string) => Promise<unknown> } } })
+        .from('users')
+        .update({
+          feature_tour_completed: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
     }
-    setShowOnboarding(false)
-    router.push('/record')
-  }
-
-  const handleOnboardingSkip = () => {
-    if (user) {
-      localStorage.setItem(`onboarding_completed_${user.id}`, 'true')
-    }
-    setShowOnboarding(false)
+    setShowFeatureTour(false)
   }
 
   const handleStartRecording = () => {
@@ -68,15 +77,13 @@ export default function WelcomePage() {
     )
   }
 
+  // Show feature tour first
+  if (showFeatureTour) {
+    return <FeatureTour onComplete={handleTourComplete} />
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Onboarding Modal */}
-      {showOnboarding && (
-        <OnboardingModal
-          onComplete={handleOnboardingComplete}
-          onSkip={handleOnboardingSkip}
-        />
-      )}
 
       {/* Header */}
       <header className="border-b border-gray-100 bg-white/80 backdrop-blur-sm">
@@ -136,7 +143,7 @@ export default function WelcomePage() {
             <Button
               onClick={handleStartRecording}
               size="lg"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg h-auto"
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-8 py-6 text-lg h-auto shadow-lg shadow-orange-500/25"
             >
               <Mic className="w-5 h-5 mr-2" />
               Record your first post

@@ -34,7 +34,14 @@ export async function GET(request: NextRequest) {
           credits_total
         )
       `)
-      .eq('user_id', user.id)
+      .eq('user_id', user.id) as { 
+        data: Array<{ 
+          workspace_id: string; 
+          role: string; 
+          workspaces: { id: string; name: string; plan: string; credits_remaining: number; credits_total: number } | null 
+        }> | null; 
+        error: unknown 
+      }
 
     if (membershipError) {
       console.error('Database error fetching workspaces:', membershipError)
@@ -48,11 +55,11 @@ export async function GET(request: NextRequest) {
     const workspaces = (memberships || [])
       .filter(m => m.workspaces) // Filter out any with missing workspace data
       .map(m => ({
-        id: (m.workspaces as any).id,
-        name: (m.workspaces as any).name,
-        plan: (m.workspaces as any).plan,
-        credits_remaining: (m.workspaces as any).credits_remaining,
-        credits_total: (m.workspaces as any).credits_total,
+        id: m.workspaces!.id,
+        name: m.workspaces!.name,
+        plan: m.workspaces!.plan,
+        credits_remaining: m.workspaces!.credits_remaining,
+        credits_total: m.workspaces!.credits_total,
         role: m.role,
       }))
 

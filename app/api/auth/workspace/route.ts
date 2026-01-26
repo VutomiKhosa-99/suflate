@@ -33,7 +33,14 @@ export async function GET(request: NextRequest) {
 
     if (workspaceError || !workspace) {
       // If no workspace exists, create one (fallback - should be handled by trigger)
-      const { data: newWorkspace, error: createError } = await supabase
+      // Using type assertion due to Supabase generated types mismatch
+      const { data: newWorkspace, error: createError } = await (supabase as unknown as {
+        from: (table: string) => {
+          insert: (data: Record<string, unknown>) => {
+            select: () => { single: () => Promise<{ data: { id: string } | null; error: unknown }> }
+          }
+        }
+      })
         .from('workspaces')
         .insert({
           name: `${user.email?.split('@')[0]}'s Workspace`,
@@ -53,7 +60,11 @@ export async function GET(request: NextRequest) {
       }
 
       // Add user as owner
-      await supabase
+      await (supabase as unknown as {
+        from: (table: string) => {
+          insert: (data: Record<string, unknown>) => Promise<unknown>
+        }
+      })
         .from('workspace_members')
         .insert({
           workspace_id: newWorkspace.id,

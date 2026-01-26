@@ -27,12 +27,13 @@ export async function GET(request: NextRequest) {
   }
 
   // LinkedIn OAuth 2.0 scopes for posting
-  // Available scopes from your LinkedIn app:
-  // - openid: Use name and photo
+  // Based on your LinkedIn app's authorized scopes:
+  // - openid: Use OpenID Connect (provides sub, name, picture, email)
   // - profile: Use name and photo  
   // - email: Primary email
   // - w_member_social: Create/modify/delete posts
-  const scopes = 'openid profile email w_member_social'
+  // - r_profile_basicinfo: Basic profile info (name, headline, photo, profile URL)
+  const scopes = 'openid profile email w_member_social r_profile_basicinfo'
 
   // Generate state for CSRF protection (store user ID for callback)
   const state = Buffer.from(JSON.stringify({

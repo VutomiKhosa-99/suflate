@@ -32,7 +32,7 @@ export function LinkedInConnectCard({ isConnected = false, onConnect }: LinkedIn
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect LinkedIn</h3>
           <p className="text-sm text-gray-600">
-            Connect your LinkedIn account to post directly to your feed. We'll only post when you
+            Connect your LinkedIn account to post directly to your feed. We&apos;ll only post when you
             explicitly choose to.
           </p>
         </div>

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { RichTextEditor } from '@/components/features/post-editor/rich-text-editor'
 import { Button } from '@/components/ui/button'
 import { LinkedInConnectCard } from '@/components/features/linkedin/linkedin-connect-card'
+import { LinkedInPostPreview } from '@/components/features/linkedin/linkedin-post-preview'
 import { SchedulePicker } from '@/components/features/scheduler/schedule-picker'
 import { TagManager } from '@/components/features/drafts/tag-manager'
 import { DeleteDialog } from '@/components/features/drafts/delete-dialog'
@@ -19,6 +20,8 @@ import {
   Trash2,
   Copy,
   Clock,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 
 // Source type icons
@@ -70,7 +73,7 @@ interface Post {
  */
 export default function EditorPage() {
   const params = useParams()
-  const id = params.id as string
+  const id = params?.id as string
   const router = useRouter()
   
   const [post, setPost] = useState<Post | null>(null)
@@ -83,8 +86,16 @@ export default function EditorPage() {
   const [isLinkedInConnected, setIsLinkedInConnected] = useState(false)
   const [showSchedule, setShowSchedule] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showPreview, setShowPreview] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  
+  // LinkedIn profile state
+  const [linkedInProfile, setLinkedInProfile] = useState<{
+    name: string
+    title: string
+    avatar?: string
+  } | null>(null)
 
   // Auto-save timer ref
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -95,10 +106,11 @@ export default function EditorPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch post and LinkedIn status in parallel
-        const [postResponse, linkedInResponse] = await Promise.all([
+        // Fetch post, LinkedIn status, and profile in parallel
+        const [postResponse, linkedInResponse, profileResponse] = await Promise.all([
           fetch(`/api/suflate/posts/${id}`),
           fetch('/api/linkedin/status'),
+          fetch('/api/linkedin/profile'),
         ])
 
         // Handle post response
@@ -124,6 +136,18 @@ export default function EditorPage() {
         if (linkedInResponse.ok) {
           const linkedInData = await linkedInResponse.json()
           setIsLinkedInConnected(linkedInData.connected)
+        }
+        
+        // Handle LinkedIn profile response
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json()
+          if (profileData.connected && profileData.profile) {
+            setLinkedInProfile({
+              name: profileData.profile.name || 'Your Name',
+              title: profileData.profile.headline || 'Your Title',
+              avatar: profileData.profile.picture,
+            })
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load post')
@@ -362,7 +386,7 @@ export default function EditorPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -393,6 +417,26 @@ export default function EditorPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Preview toggle */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPreview(!showPreview)}
+              className="gap-2"
+            >
+              {showPreview ? (
+                <>
+                  <EyeOff className="w-4 h-4" />
+                  Hide Preview
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4" />
+                  Show Preview
+                </>
+              )}
+            </Button>
+            
             {/* Save status indicator */}
             <div className="flex items-center gap-2 text-sm text-gray-500 mr-2">
               {saveStatus === 'saving' && (
@@ -458,87 +502,111 @@ export default function EditorPage() {
           </div>
         </div>
 
-        {/* Tags management (Story 3.6) */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Tags
-          </label>
-          <TagManager
-            tags={tags}
-            onChange={handleTagsChange}
-            maxTags={10}
-            placeholder="Add tag..."
-          />
-        </div>
+        {/* Main content - side by side layout */}
+        <div className={`grid gap-6 ${showPreview ? 'lg:grid-cols-2' : 'grid-cols-1 max-w-4xl'}`}>
+          {/* Left side - Editor */}
+          <div className="space-y-6">
+            {/* Tags management (Story 3.6) */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tags
+              </label>
+              <TagManager
+                tags={tags}
+                onChange={handleTagsChange}
+                maxTags={10}
+                placeholder="Add tag..."
+              />
+            </div>
 
-        {/* Editor (Story 3.3) */}
-        <RichTextEditor
-          initialContent={content}
-          onChange={handleContentChange}
-          onFixGrammar={handleFixGrammar}
-          onMakeClearer={handleMakeClearer}
-          onShorten={handleShorten}
-        />
+            {/* Editor (Story 3.3) */}
+            <RichTextEditor
+              initialContent={content}
+              onChange={handleContentChange}
+              onFixGrammar={handleFixGrammar}
+              onMakeClearer={handleMakeClearer}
+              onShorten={handleShorten}
+            />
 
-        {/* Word and character count */}
-        <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span>{content.trim().split(/\s+/).filter(Boolean).length} words</span>
-          <span>{content.length} characters</span>
-          {content.length > 3000 && (
-            <span className="text-yellow-600">
-              LinkedIn limit: 3000 characters
-            </span>
-          )}
-        </div>
+            {/* Word and character count */}
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <span>{content.trim().split(/\s+/).filter(Boolean).length} words</span>
+              <span>{content.length} characters</span>
+              {content.length > 3000 && (
+                <span className="text-yellow-600">
+                  LinkedIn limit: 3000 characters
+                </span>
+              )}
+            </div>
 
-        {/* LinkedIn connection */}
-        <LinkedInConnectCard
-          isConnected={isLinkedInConnected}
-          onConnect={handleLinkedInConnect}
-        />
+            {/* LinkedIn connection */}
+            <LinkedInConnectCard
+              isConnected={isLinkedInConnected}
+              onConnect={handleLinkedInConnect}
+            />
 
-        {/* Post/Schedule actions */}
-        {isLinkedInConnected && (
-          <div className="space-y-4">
-            {!showSchedule ? (
-              <div className="flex gap-4">
-                <Button 
-                  onClick={handlePostNow} 
-                  size="lg" 
-                  className="flex-1"
-                  disabled={publishing}
-                >
-                  {publishing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Posting...
-                    </>
-                  ) : (
-                    'Post on LinkedIn'
-                  )}
-                </Button>
-                <Button
-                  onClick={() => setShowSchedule(true)}
-                  variant="outline"
-                  size="lg"
-                  className="flex-1"
-                  disabled={publishing}
-                >
-                  Schedule
-                </Button>
+            {/* Post/Schedule actions */}
+            {isLinkedInConnected && (
+              <div className="space-y-4">
+                {!showSchedule ? (
+                  <div className="flex gap-4">
+                    <Button 
+                      onClick={handlePostNow} 
+                      size="lg" 
+                      className="flex-1"
+                      disabled={publishing}
+                    >
+                      {publishing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Posting...
+                        </>
+                      ) : (
+                        'Post on LinkedIn'
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => setShowSchedule(true)}
+                      variant="outline"
+                      size="lg"
+                      className="flex-1"
+                      disabled={publishing}
+                    >
+                      Schedule
+                    </Button>
+                  </div>
+                ) : (
+                  <SchedulePicker onSchedule={handleSchedule} onPostNow={handlePostNow} />
+                )}
               </div>
-            ) : (
-              <SchedulePicker onSchedule={handleSchedule} onPostNow={handlePostNow} />
+            )}
+
+            {/* Error message */}
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                {error}
+              </div>
             )}
           </div>
-        )}
-
-        {/* Error message */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
-            {error}
-          </div>
-        )}
+          
+          {/* Right side - LinkedIn Preview */}
+          {showPreview && (
+            <div className="space-y-4">
+              <div className="sticky top-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">LinkedIn Preview</h3>
+                <LinkedInPostPreview
+                  content={content}
+                  userName={linkedInProfile?.name || 'Your Name'}
+                  userTitle={linkedInProfile?.title || 'Your Title'}
+                  userAvatar={linkedInProfile?.avatar}
+                />
+                <p className="text-xs text-gray-400 mt-3 text-center">
+                  This is a preview of how your post will appear on LinkedIn
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Delete confirmation dialog */}

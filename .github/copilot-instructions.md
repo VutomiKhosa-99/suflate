@@ -4,6 +4,16 @@
 - **Suflate** is a voice-first LinkedIn content creation platform. Users record/upload audio, which is transcribed, analyzed, and amplified into multiple LinkedIn-ready post variations.
 - **Tech stack:** Next.js 14 (App Router), TypeScript, Supabase (PostgreSQL, Auth, Storage), Tailwind CSS, OpenRouter API (LLM), AssemblyAI (transcription), Vercel (hosting).
 
+## ⚠️ MANDATORY: Build Verification
+**After EVERY fix and feature implementation, you MUST verify the app builds successfully:**
+```bash
+npm run build
+```
+- Do not consider a task complete until `npm run build` passes without errors.
+- TypeScript errors must be resolved before marking work as done.
+- ESLint warnings are acceptable, but errors are not.
+- If the build fails, fix the issues before proceeding.
+
 ## Architecture & Key Patterns
 - **Voice Amplification Pipeline:**
   - Audio → Supabase Storage → AssemblyAI transcription → Suflate processing → Multiple post variations (OpenRouter API).

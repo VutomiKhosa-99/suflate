@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Link2,
@@ -15,6 +14,9 @@ import {
   CheckCircle,
   AlertCircle,
   Upload,
+  Sparkles,
+  Zap,
+  X,
 } from 'lucide-react'
 
 type RepurposeType = 'blog' | 'tweet' | 'youtube' | 'pdf' | null
@@ -27,12 +29,7 @@ interface RepurposeResult {
 
 /**
  * Epic 6: Content Repurposing Page
- * 
- * Allows users to repurpose content from:
- * - Blog URLs (Story 6.1)
- * - Tweet text (Story 6.2)
- * - YouTube URLs (Story 6.3)
- * - PDF uploads (Story 6.4)
+ * Supergrow-style design
  */
 export default function RepurposePage() {
   const router = useRouter()
@@ -52,6 +49,9 @@ export default function RepurposePage() {
       icon: Link2,
       credits: 5,
       color: 'blue',
+      gradient: 'from-blue-500 to-indigo-500',
+      bgColor: 'bg-blue-50',
+      borderColor: 'border-blue-200',
     },
     {
       id: 'tweet' as RepurposeType,
@@ -60,6 +60,9 @@ export default function RepurposePage() {
       icon: Twitter,
       credits: 3,
       color: 'sky',
+      gradient: 'from-sky-500 to-blue-500',
+      bgColor: 'bg-sky-50',
+      borderColor: 'border-sky-200',
     },
     {
       id: 'youtube' as RepurposeType,
@@ -68,6 +71,9 @@ export default function RepurposePage() {
       icon: Youtube,
       credits: 5,
       color: 'red',
+      gradient: 'from-red-500 to-rose-500',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-200',
     },
     {
       id: 'pdf' as RepurposeType,
@@ -76,6 +82,9 @@ export default function RepurposePage() {
       icon: FileText,
       credits: 5,
       color: 'orange',
+      gradient: 'from-orange-500 to-amber-500',
+      bgColor: 'bg-orange-50',
+      borderColor: 'border-orange-200',
     },
   ]
 
@@ -181,53 +190,65 @@ export default function RepurposePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Repurpose Content</h1>
-        <p className="text-gray-600 mt-1">
-          Transform existing content into LinkedIn posts
+    <div className="max-w-5xl mx-auto px-4 py-6">
+      {/* Supergrow-style Header */}
+      <div className="text-center mb-10">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl mb-6 shadow-lg shadow-orange-500/30">
+          <Sparkles className="w-8 h-8 text-white" />
+        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-3">
+          Repurpose Content
+        </h1>
+        <p className="text-gray-500 text-lg max-w-xl mx-auto">
+          Transform your existing content into engaging LinkedIn posts in seconds
         </p>
       </div>
 
-      {/* Success state */}
+      {/* Success state - Supergrow style */}
       {result?.success && result.posts && (
-        <Card className="p-6 mb-6 border-green-200 bg-green-50">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+        <div className="bg-white rounded-2xl border border-green-200 p-8 mb-8">
+          <div className="flex items-start gap-5">
+            <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="w-7 h-7 text-green-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-green-900">
+              <h3 className="text-xl font-semibold text-gray-900">
                 {result.posts.length} posts created!
               </h3>
-              <p className="text-green-700 text-sm mt-1">
+              <p className="text-gray-500 mt-1">
                 Your content has been repurposed into LinkedIn post drafts.
               </p>
-              <div className="flex gap-3 mt-4">
-                <Button onClick={() => router.push('/drafts')}>
+              <div className="flex gap-3 mt-6">
+                <Button 
+                  onClick={() => router.push('/drafts')}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
                   View Drafts
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
-                <Button variant="outline" onClick={resetForm}>
+                <Button variant="outline" onClick={resetForm} className="border-gray-200">
                   Repurpose More
                 </Button>
               </div>
             </div>
           </div>
-        </Card>
+        </div>
       )}
 
-      {/* Error state */}
+      {/* Error state - Supergrow style */}
       {result && !result.success && (
-        <Card className="p-4 mb-6 border-red-200 bg-red-50">
+        <div className="bg-red-50 rounded-xl border border-red-200 p-4 mb-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600" />
             <p className="text-red-700">{result.error}</p>
           </div>
-        </Card>
+          <button onClick={() => setResult(null)} className="p-1 hover:bg-red-100 rounded">
+            <X className="w-4 h-4 text-red-600" />
+          </button>
+        </div>
       )}
 
-      {/* Content type selection */}
+      {/* Content type selection - Supergrow style */}
       {!result?.success && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -242,22 +263,34 @@ export default function RepurposePage() {
                     setSelectedType(type.id)
                     setResult(null)
                   }}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`p-5 rounded-xl border-2 text-left transition-all group hover:shadow-lg ${
                     isSelected
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                      ? `border-orange-500 ${type.bgColor}`
+                      : 'border-gray-200 hover:border-orange-200 bg-white'
                   }`}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      isSelected ? 'bg-blue-100' : 'bg-gray-100'
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                      isSelected 
+                        ? `bg-gradient-to-br ${type.gradient} shadow-lg` 
+                        : 'bg-gray-100 group-hover:bg-orange-100'
                     }`}>
-                      <Icon className={`w-5 h-5 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
+                      <Icon className={`w-6 h-6 ${isSelected ? 'text-white' : 'text-gray-600 group-hover:text-orange-600'}`} />
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-medium text-gray-900">{type.name}</h3>
-                      <p className="text-sm text-gray-500 mt-0.5">{type.description}</p>
-                      <p className="text-xs text-gray-400 mt-1">{type.credits} credits</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900">{type.name}</h3>
+                        {isSelected && (
+                          <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-medium rounded-full">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">{type.description}</p>
+                      <div className="flex items-center gap-1 mt-2">
+                        <Zap className="w-3.5 h-3.5 text-orange-500" />
+                        <span className="text-xs text-orange-600 font-medium">{type.credits} credits</span>
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -265,23 +298,23 @@ export default function RepurposePage() {
             })}
           </div>
 
-          {/* Input based on selected type */}
+          {/* Input based on selected type - Supergrow style */}
           {selectedType && (
-            <Card className="p-6">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
               {selectedType === 'blog' && (
                 <div className="space-y-4">
                   <label className="block">
-                    <span className="text-sm font-medium text-gray-700">Blog URL</span>
+                    <span className="text-sm font-semibold text-gray-700">Blog URL</span>
                     <Input
                       type="url"
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
                       placeholder="https://example.com/blog-post"
-                      className="mt-1"
+                      className="mt-2 h-12 rounded-xl border-gray-200 focus:ring-orange-500 focus:border-orange-500"
                     />
                   </label>
-                  <p className="text-xs text-gray-500">
-                    Paste the URL of any blog post or article. We'll extract the content and create 3 LinkedIn post variations.
+                  <p className="text-sm text-gray-500">
+                    Paste the URL of any blog post or article. We&apos;ll extract the content and create 3 LinkedIn post variations.
                   </p>
                 </div>
               )}
@@ -289,21 +322,21 @@ export default function RepurposePage() {
               {selectedType === 'tweet' && (
                 <div className="space-y-4">
                   <label className="block">
-                    <span className="text-sm font-medium text-gray-700">Tweet Text</span>
+                    <span className="text-sm font-semibold text-gray-700">Tweet Text</span>
                     <textarea
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       placeholder="Paste your tweet or thread text here..."
                       rows={4}
                       maxLength={1000}
-                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                      className="mt-2 w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 resize-none transition-all"
                     />
                     <div className="text-xs text-gray-400 text-right mt-1">
                       {text.length}/1000
                     </div>
                   </label>
-                  <p className="text-xs text-gray-500">
-                    Paste tweet text and we'll expand it into longer-form LinkedIn content.
+                  <p className="text-sm text-gray-500">
+                    Paste tweet text and we&apos;ll expand it into longer-form LinkedIn content.
                   </p>
                 </div>
               )}
@@ -311,17 +344,17 @@ export default function RepurposePage() {
               {selectedType === 'youtube' && (
                 <div className="space-y-4">
                   <label className="block">
-                    <span className="text-sm font-medium text-gray-700">YouTube URL</span>
+                    <span className="text-sm font-semibold text-gray-700">YouTube URL</span>
                     <Input
                       type="url"
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
                       placeholder="https://youtube.com/watch?v=..."
-                      className="mt-1"
+                      className="mt-2 h-12 rounded-xl border-gray-200 focus:ring-orange-500 focus:border-orange-500"
                     />
                   </label>
-                  <p className="text-xs text-gray-500">
-                    We'll extract the video's title, description, and available metadata to create LinkedIn posts.
+                  <p className="text-sm text-gray-500">
+                    We&apos;ll extract the video&apos;s title, description, and available metadata to create LinkedIn posts.
                   </p>
                 </div>
               )}
@@ -329,17 +362,27 @@ export default function RepurposePage() {
               {selectedType === 'pdf' && (
                 <div className="space-y-4">
                   <label className="block">
-                    <span className="text-sm font-medium text-gray-700">PDF Document</span>
-                    <div className="mt-1">
-                      <label className="flex items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-gray-300 border-dashed rounded-md appearance-none cursor-pointer hover:border-gray-400 focus:outline-none">
-                        <div className="flex flex-col items-center space-y-2">
-                          <Upload className="w-8 h-8 text-gray-400" />
+                    <span className="text-sm font-semibold text-gray-700">PDF Document</span>
+                    <div className="mt-2">
+                      <label className={`flex items-center justify-center w-full h-40 px-4 transition-all bg-gray-50 border-2 border-dashed rounded-xl cursor-pointer ${
+                        file ? 'border-orange-300 bg-orange-50' : 'border-gray-300 hover:border-orange-300 hover:bg-orange-50/50'
+                      }`}>
+                        <div className="flex flex-col items-center space-y-3">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                            file ? 'bg-orange-100' : 'bg-white'
+                          }`}>
+                            <Upload className={`w-6 h-6 ${file ? 'text-orange-600' : 'text-gray-400'}`} />
+                          </div>
                           {file ? (
-                            <span className="font-medium text-gray-600">{file.name}</span>
+                            <div className="text-center">
+                              <span className="font-medium text-gray-900">{file.name}</span>
+                              <p className="text-xs text-gray-500 mt-1">Click to change file</p>
+                            </div>
                           ) : (
-                            <span className="text-sm text-gray-500">
-                              Click to upload PDF (max 10MB)
-                            </span>
+                            <div className="text-center">
+                              <span className="font-medium text-gray-700">Click to upload PDF</span>
+                              <p className="text-xs text-gray-500 mt-1">Max 10MB</p>
+                            </div>
                           )}
                         </div>
                         <input
@@ -351,8 +394,8 @@ export default function RepurposePage() {
                       </label>
                     </div>
                   </label>
-                  <p className="text-xs text-gray-500">
-                    We'll extract text from your PDF and identify key points for LinkedIn posts.
+                  <p className="text-sm text-gray-500">
+                    We&apos;ll extract text from your PDF and identify key points for LinkedIn posts.
                   </p>
                 </div>
               )}
@@ -361,23 +404,23 @@ export default function RepurposePage() {
                 <Button
                   onClick={handleRepurpose}
                   disabled={loading}
-                  className="w-full"
+                  className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-base font-medium"
                   size="lg"
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                       Processing...
                     </>
                   ) : (
                     <>
+                      <Sparkles className="w-5 h-5 mr-2" />
                       Repurpose Content
-                      <ArrowRight className="w-4 h-4 ml-2" />
                     </>
                   )}
                 </Button>
               </div>
-            </Card>
+            </div>
           )}
         </>
       )}

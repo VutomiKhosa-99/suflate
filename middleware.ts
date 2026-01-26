@@ -1,129 +1,112 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+interface CookieToSet {
+  name: string
+  value: string
+  options?: Record<string, unknown>
+}
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+  let supabaseResponse = NextResponse.next({
+    request,
   })
 
-  // Get all cookies and handle chunked cookies
-  const allCookies = request.cookies.getAll()
-  
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
-          return allCookies
+          return request.cookies.getAll()
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          response = NextResponse.next({
+        setAll(cookiesToSet: CookieToSet[]) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
             request,
           })
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options as CookieOptions)
+            supabaseResponse.cookies.set(name, value, options)
           )
         },
       },
     }
   )
 
-  // Try to get user from session
+  // Try standard getUser first
   let user = null
-  
-  // Debug: log cookies on protected routes
-  const isProtectedRoute = request.nextUrl.pathname.includes('dashboard') || 
-                           request.nextUrl.pathname.includes('record') ||
-                           request.nextUrl.pathname.includes('editor') ||
-                           request.nextUrl.pathname.includes('settings')
-  const authCookies = allCookies.filter(c => c.name.includes('sb-'))
-  if (isProtectedRoute) {
-    console.log('[Middleware] Checking auth for:', request.nextUrl.pathname)
-    console.log('[Middleware] Auth cookies:', authCookies.map(c => `${c.name}=${c.value.substring(0, 50)}...`))
-  }
-  
-  // First try the standard getUser approach
-  const { data, error: userError } = await supabase.auth.getUser()
+  const { data } = await supabase.auth.getUser()
   user = data?.user
-  
-  if (isProtectedRoute) {
-    console.log('[Middleware] getUser result:', user ? user.email : 'no user', userError?.message || '')
-  }
-  
-  // If that fails, try to manually combine and parse chunked cookies
-  if (!user && authCookies.length > 0) {
-    try {
-      // Find all chunks of the auth token cookie
-      const tokenCookies = authCookies
-        .filter(c => c.name.includes('-auth-token') && !c.name.includes('code-verifier'))
-        .sort((a, b) => a.name.localeCompare(b.name))
-      
-      if (tokenCookies.length > 0) {
-        // Combine chunked cookie values
-        let combinedValue = ''
+
+  // If no user, try to manually parse our custom cookie
+  if (!user) {
+    const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)/)?.[1] || ''
+    const cookieName = `sb-${projectRef}-auth-token`
+    
+    // Check for chunked or single cookie
+    const allCookies = request.cookies.getAll()
+    const authCookies = allCookies.filter(c => c.name.startsWith(cookieName))
+    
+    if (authCookies.length > 0) {
+      try {
+        let cookieValue = ''
         
-        // Check if cookies are chunked (.0, .1, etc.)
-        const isChunked = tokenCookies.some(c => c.name.match(/\.\d+$/))
-        
+        // Check if chunked
+        const isChunked = authCookies.some(c => c.name.match(/\.\d+$/))
         if (isChunked) {
-          // Sort by chunk number and combine
-          const chunks = tokenCookies
+          // Sort and combine chunks
+          const chunks = authCookies
             .filter(c => c.name.match(/\.\d+$/))
             .sort((a, b) => {
               const aNum = parseInt(a.name.match(/\.(\d+)$/)?.[1] || '0')
               const bNum = parseInt(b.name.match(/\.(\d+)$/)?.[1] || '0')
               return aNum - bNum
             })
-          combinedValue = chunks.map(c => c.value).join('')
+          cookieValue = chunks.map(c => c.value).join('')
         } else {
-          combinedValue = tokenCookies[0].value
+          cookieValue = authCookies[0].value
         }
         
-        // Handle base64 encoding
-        if (combinedValue.startsWith('base64-')) {
-          combinedValue = Buffer.from(combinedValue.replace('base64-', ''), 'base64').toString()
+        // Decode base64
+        if (cookieValue.startsWith('base64-')) {
+          cookieValue = Buffer.from(cookieValue.replace('base64-', ''), 'base64').toString()
         }
         
-        if (isProtectedRoute) {
-          console.log('[Middleware] Combined cookie length:', combinedValue.length)
-        }
-        
-        const sessionData = JSON.parse(combinedValue)
+        const sessionData = JSON.parse(cookieValue)
         if (sessionData.access_token) {
-          const { data: sessionResult, error: setError } = await supabase.auth.setSession({
+          const { data: sessionResult } = await supabase.auth.setSession({
             access_token: sessionData.access_token,
             refresh_token: sessionData.refresh_token || '',
           })
           user = sessionResult?.user
-          if (isProtectedRoute) {
-            console.log('[Middleware] Fallback session result:', user ? user.email : 'no user', setError?.message || '')
-          }
         }
-      }
-    } catch (e) {
-      if (isProtectedRoute) {
-        console.log('[Middleware] Cookie parse error:', e)
+      } catch (e) {
+        // Ignore parse errors
       }
     }
   }
 
-  // Protect dashboard routes - redirect to login if not authenticated
-  if (request.nextUrl.pathname.startsWith('/dashboard') || 
-      request.nextUrl.pathname.startsWith('/record') ||
-      request.nextUrl.pathname.startsWith('/editor') ||
-      request.nextUrl.pathname.startsWith('/settings')) {
-    if (!user) {
-      const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = '/login'
-      redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
-      return NextResponse.redirect(redirectUrl)
-    }
+  // Debug logging for protected routes
+  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') || 
+                           request.nextUrl.pathname.startsWith('/record') ||
+                           request.nextUrl.pathname.startsWith('/editor') ||
+                           request.nextUrl.pathname.startsWith('/settings') ||
+                           request.nextUrl.pathname.startsWith('/drafts') ||
+                           request.nextUrl.pathname.startsWith('/calendar') ||
+                           request.nextUrl.pathname.startsWith('/carousels') ||
+                           request.nextUrl.pathname.startsWith('/repurpose') ||
+                           request.nextUrl.pathname.startsWith('/analytics')
+  
+  if (isProtectedRoute) {
+    console.log('[Middleware] Auth check for:', request.nextUrl.pathname, user ? user.email : 'no user')
+  }
+
+  // Protect routes - redirect to login if not authenticated
+  if (isProtectedRoute && !user) {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/login'
+    redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
+    return NextResponse.redirect(redirectUrl)
   }
 
   // Redirect authenticated users away from public/auth pages to dashboard
@@ -133,18 +116,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  return response
+  return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Search, Filter, X, Mic, FileText, Twitter, Tag } from 'lucide-react'
+import { Filter, X, Mic, FileText, Twitter, Tag } from 'lucide-react'
 
 // Filter options
 const SOURCE_TYPES = [
@@ -45,9 +44,10 @@ export function DraftFiltersComponent({
     filters.variationType ||
     filters.tags.length > 0
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onFiltersChange({ ...filters, search: e.target.value })
-  }
+  const activeFilterCount = 
+    (filters.sourceType ? 1 : 0) +
+    (filters.variationType ? 1 : 0) +
+    filters.tags.length
 
   const handleSourceTypeChange = (sourceType: string | null) => {
     onFiltersChange({
@@ -80,47 +80,38 @@ export function DraftFiltersComponent({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Search and filter toggle */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Search drafts..."
-            value={filters.search}
-            onChange={handleSearchChange}
-            className="pl-10"
-          />
-        </div>
-        <Button
-          variant={showFilters || hasActiveFilters ? 'default' : 'outline'}
-          onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2"
-        >
-          <Filter className="w-4 h-4" />
-          Filters
-          {hasActiveFilters && (
-            <span className="w-5 h-5 rounded-full bg-white text-blue-600 text-xs flex items-center justify-center">
-              {(filters.sourceType ? 1 : 0) +
-                (filters.variationType ? 1 : 0) +
-                filters.tags.length}
-            </span>
-          )}
-        </Button>
-      </div>
+    <div className="relative">
+      {/* Filter button only */}
+      <Button
+        variant="outline"
+        onClick={() => setShowFilters(!showFilters)}
+        className={`flex items-center gap-2 border-gray-200 ${hasActiveFilters ? 'border-orange-300 bg-orange-50 text-orange-600' : ''}`}
+      >
+        <Filter className="w-4 h-4" />
+        Filters
+        {hasActiveFilters && (
+          <span className="w-5 h-5 rounded-full bg-orange-500 text-white text-xs flex items-center justify-center">
+            {activeFilterCount}
+          </span>
+        )}
+      </Button>
 
-      {/* Filter panel */}
+      {/* Filter dropdown panel */}
       {showFilters && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setShowFilters(false)}
+          />
+          <div className="absolute right-0 top-12 w-80 bg-white border border-gray-200 rounded-xl shadow-lg p-4 space-y-4 z-20">
           {/* Active filters */}
           {hasActiveFilters && (
             <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
-              <span className="text-sm text-gray-500">Active filters:</span>
+              <span className="text-sm text-gray-500">Active:</span>
               {filters.sourceType && (
                 <button
                   onClick={() => handleSourceTypeChange(null)}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-sm hover:bg-blue-100"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm hover:bg-orange-100 transition-colors"
                 >
                   {SOURCE_TYPES.find((s) => s.value === filters.sourceType)?.label}
                   <X className="w-3 h-3" />
@@ -129,7 +120,7 @@ export function DraftFiltersComponent({
               {filters.variationType && (
                 <button
                   onClick={() => handleVariationTypeChange(null)}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-sm hover:bg-blue-100"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm hover:bg-orange-100 transition-colors"
                 >
                   {VARIATION_TYPES.find((v) => v.value === filters.variationType)?.label}
                   <X className="w-3 h-3" />
@@ -139,7 +130,7 @@ export function DraftFiltersComponent({
                 <button
                   key={tag}
                   onClick={() => handleTagToggle(tag)}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-sm hover:bg-blue-100"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm hover:bg-orange-100 transition-colors"
                 >
                   {tag}
                   <X className="w-3 h-3" />
@@ -164,7 +155,7 @@ export function DraftFiltersComponent({
                   onClick={() => handleSourceTypeChange(source.value)}
                   className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
                     filters.sourceType === source.value
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      ? 'border-orange-500 bg-orange-50 text-orange-700'
                       : 'border-gray-200 hover:border-gray-300 text-gray-700'
                   }`}
                 >
@@ -185,7 +176,7 @@ export function DraftFiltersComponent({
                   onClick={() => handleVariationTypeChange(variation.value)}
                   className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
                     filters.variationType === variation.value
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      ? 'border-orange-500 bg-orange-50 text-orange-700'
                       : `border-gray-200 hover:border-gray-300 ${variation.color}`
                   }`}
                 >
@@ -206,7 +197,7 @@ export function DraftFiltersComponent({
                     onClick={() => handleTagToggle(tag)}
                     className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
                       filters.tags.includes(tag)
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
                         : 'border-gray-200 hover:border-gray-300 text-gray-700'
                     }`}
                   >
@@ -217,7 +208,8 @@ export function DraftFiltersComponent({
               </div>
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   )

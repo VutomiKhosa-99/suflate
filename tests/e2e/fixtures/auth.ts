@@ -28,7 +28,7 @@ export const test = base.extend<AuthFixtures>({
   },
 
   // Supabase admin client for cleanup (optional)
-  supabaseAdmin: async ({}, use) => {
+  supabaseAdmin: async ({}, use: (arg: unknown) => Promise<void>) => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -42,7 +42,7 @@ export const test = base.extend<AuthFixtures>({
   },
 
   // Authenticated page - automatically signs up and logs in
-  authenticatedPage: async ({ page, testUser, supabaseAdmin }, use) => {
+  authenticatedPage: async ({ page, testUser, supabaseAdmin }: { page: unknown; testUser: unknown; supabaseAdmin: unknown }, use: (arg: unknown) => Promise<void>) => {
     // Option 1: Use Supabase admin to create and verify user (faster)
     if (supabaseAdmin) {
       try {

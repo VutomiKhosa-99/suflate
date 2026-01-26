@@ -12,9 +12,9 @@ function CallbackHandler() {
   useEffect(() => {
     const handleCallback = async () => {
       const supabase = createClient()
-      const token_hash = searchParams.get('token_hash')
-      const type = searchParams.get('type')
-      const next = searchParams.get('next') || '/dashboard'
+      const token_hash = searchParams?.get('token_hash')
+      const type = searchParams?.get('type')
+      const next = searchParams?.get('next') || '/dashboard'
 
       console.log('[Callback Handler] Starting...', { 
         hasTokenHash: !!token_hash, 
@@ -86,14 +86,14 @@ function CallbackHandler() {
         const refreshToken = hashParams.get('refresh_token')
 
         if (accessToken) {
-          const { data, error: setError } = await supabase.auth.setSession({
+          const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
           })
 
-          if (setError) {
-            console.error('[Callback Handler] Set session error:', setError.message)
-            setError(setError.message)
+          if (sessionError) {
+            console.error('[Callback Handler] Set session error:', sessionError.message)
+            setError(sessionError.message)
             return
           }
 
@@ -112,7 +112,7 @@ function CallbackHandler() {
 
     const syncSessionToCookies = async (session: any) => {
       try {
-        await fetch('/api/auth/session', {
+        const res = await fetch('/api/auth/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -121,13 +121,20 @@ function CallbackHandler() {
             refresh_token: session.refresh_token,
           }),
         })
-        console.log('[Callback Handler] Session synced to cookies')
+        
+        if (res.ok) {
+          console.log('[Callback Handler] Session synced to cookies')
+          // Wait for cookies to be processed by browser
+          await new Promise(resolve => setTimeout(resolve, 100))
+        } else {
+          console.error('[Callback Handler] Failed to sync session:', await res.text())
+        }
       } catch (e) {
         console.error('[Callback Handler] Failed to sync session:', e)
       }
     }
 
-    const redirectUser = async (user: any, defaultNext: string) => {
+    const redirectUser = async (user: { id: string }, defaultNext: string) => {
       const supabase = createClient()
       
       // Check if user has completed onboarding
@@ -135,12 +142,15 @@ function CallbackHandler() {
         .from('users')
         .select('onboarding_completed')
         .eq('id', user.id)
-        .single()
+        .single() as { data: { onboarding_completed?: boolean } | null; error: unknown }
 
       // New users or users who haven't completed onboarding go to /onboarding
       const needsOnboarding = !userData?.onboarding_completed
       const destination = needsOnboarding ? '/onboarding' : defaultNext
       console.log('[Callback Handler] Redirecting to:', destination, { needsOnboarding })
+      
+      // Use router push with a slight delay to ensure cookies are set
+      await new Promise(resolve => setTimeout(resolve, 200))
       window.location.href = destination
     }
 

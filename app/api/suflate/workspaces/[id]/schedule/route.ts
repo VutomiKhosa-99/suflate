@@ -42,7 +42,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .from('workspaces')
       .select('id, name, posting_schedule')
       .eq('id', id)
-      .single()
+      .single() as { data: { id: string; name: string; posting_schedule?: unknown } | null; error: unknown }
 
     if (error || !workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
@@ -112,7 +112,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .select('role')
       .eq('workspace_id', id)
       .eq('user_id', user.id)
-      .single()
+      .single() as { data: { role: string } | null; error: unknown }
 
     if (!membership) {
       return NextResponse.json(
@@ -134,9 +134,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .from('workspaces')
       .select('posting_schedule')
       .eq('id', id)
-      .single()
+      .single() as { data: { posting_schedule?: unknown } | null; error: unknown }
 
-    const currentSchedule = (workspace?.posting_schedule as any) || {
+    const currentSchedule = (workspace?.posting_schedule as Record<string, unknown>) || {
       days: [1, 2, 3, 4, 5],
       times: ['09:00', '12:00', '17:00'],
       timezone: 'UTC',
@@ -155,7 +155,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .update({
         posting_schedule: newSchedule,
         updated_at: new Date().toISOString(),
-      })
+      } as never)
       .eq('id', id)
 
     if (updateError) {

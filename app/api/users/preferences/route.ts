@@ -95,3 +95,56 @@ export async function PATCH(request: NextRequest) {
     )
   }
 }
+
+/**
+ * PUT /api/users/preferences
+ * Update user's profile fields including LinkedIn headline
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const { user, error: authError } = await getAuthUser(request)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { linkedin_headline, name } = body
+
+    const supabase = getServiceClient()
+    
+    // Build update object with only provided fields
+    const updateData: Record<string, string> = {
+      updated_at: new Date().toISOString(),
+    }
+    
+    if (linkedin_headline !== undefined) {
+      updateData.linkedin_headline = linkedin_headline
+    }
+    
+    if (name !== undefined) {
+      updateData.name = name
+    }
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', user.id)
+
+    if (updateError) {
+      console.error('Failed to update user profile:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update profile' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Update profile error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

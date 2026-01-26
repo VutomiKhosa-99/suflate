@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { IncomingForm } from 'formidable'
+// @ts-ignore - formidable doesn't have type declarations
+import { IncomingForm, File as FormidableFile } from 'formidable'
+// @ts-ignore - pdf-parse type issue
 import * as pdf from 'pdf-parse'
 import fs from 'fs'
 
@@ -17,11 +19,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const form = new IncomingForm()
   form.maxFileSize = 10 * 1024 * 1024 // 10MB
 
-  form.parse(req, async (err, fields, files) => {
+  form.parse(req, async (err: Error | null, fields: Record<string, unknown>, files: Record<string, unknown>) => {
     if (err) {
       return res.status(400).json({ error: 'Failed to parse form data' })
     }
-    const file = files.file as formidable.File
+    const file = files.file as FormidableFile
     if (!file) {
       return res.status(400).json({ error: 'PDF file is required' })
     }
@@ -30,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     try {
       const buffer = fs.readFileSync(file.filepath)
-      const pdfData = await pdf.default(buffer)
+      const pdfData = await (pdf as unknown as { default: (buffer: Buffer) => Promise<{ text: string; numpages: number }> }).default(buffer)
       const text = pdfData.text
       const pageCount = pdfData.numpages
       return res.status(200).json({ text, pageCount })

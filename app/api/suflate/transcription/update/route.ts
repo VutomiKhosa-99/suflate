@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+
+// Helper to get service client (bypasses RLS)
+function getServiceClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 /**
  * PATCH /api/suflate/transcription/update
@@ -21,8 +30,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Create supabase client for database operations
-    const supabase = await createClient()
+    // Use service client to bypass RLS
+    const supabase = getServiceClient()
 
     const body = await request.json()
     const { transcriptionId, processed_text } = body
@@ -44,14 +53,29 @@ export async function PATCH(request: NextRequest) {
     // Verify transcription exists
     const { data: existingTranscription, error: fetchError } = await supabase
       .from('transcriptions')
-      .select('id')
+      .select('id, recording_id')
       .eq('id', transcriptionId)
       .single()
 
     if (fetchError || !existingTranscription) {
+      console.error('Transcription fetch error:', fetchError)
       return NextResponse.json(
         { error: 'Transcription not found' },
         { status: 404 }
+      )
+    }
+
+    // Verify user owns the voice recording
+    const { data: voiceRecording, error: voiceError } = await supabase
+      .from('voice_recordings')
+      .select('user_id')
+      .eq('id', existingTranscription.recording_id)
+      .single()
+
+    if (voiceError || !voiceRecording || voiceRecording.user_id !== user.id) {
+      return NextResponse.json(
+        { error: 'Not authorized to edit this transcription' },
+        { status: 403 }
       )
     }
 

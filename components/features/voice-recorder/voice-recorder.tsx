@@ -355,57 +355,55 @@ export function VoiceRecorder() {
       {/* Upload Audio File Option */}
       <div className="text-center">
         <p className="text-sm text-muted-foreground mb-2">Or upload an existing audio file</p>
-        <Button variant="outline" asChild>
-          <label htmlFor="audio-upload" className="cursor-pointer">
-            Upload Audio File
-            <input
-              id="audio-upload"
-              type="file"
-              accept="audio/*"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
+        <label htmlFor="audio-upload" className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2">
+          Upload Audio File
+          <input
+            id="audio-upload"
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
 
-                setError(null)
-                setIsUploading(true)
+              setError(null)
+              setIsUploading(true)
 
-                try {
-                  // Client-side validation (Story 1.2)
-                  const validation = await validateAudioFile(file)
-                  
-                  if (!validation.valid) {
-                    setError(validation.error || 'Invalid file')
-                    setIsUploading(false)
-                    return
-                  }
-
-                  // Upload file
-                  const formData = new FormData()
-                  formData.append('audio', file)
-
-                  const response = await fetch('/api/suflate/voice/upload', {
-                    method: 'POST',
-                    body: formData,
-                  })
-
-                  if (!response.ok) {
-                    const errorData = await response.json()
-                    throw new Error(errorData.error || 'Failed to upload file')
-                  }
-
-                  const data = await response.json()
-                  
-                  // Redirect to recording detail page
-                  window.location.href = `/record/${data.recordingId}`
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : 'Failed to upload file')
+              try {
+                // Client-side validation (Story 1.2)
+                const validation = await validateAudioFile(file)
+                
+                if (!validation.valid) {
+                  setError(validation.error || 'Invalid file')
                   setIsUploading(false)
+                  return
                 }
-              }}
-            />
-          </label>
-        </Button>
+
+                // Upload file
+                const formData = new FormData()
+                formData.append('audio', file)
+
+                const response = await fetch('/api/suflate/voice/upload', {
+                  method: 'POST',
+                  body: formData,
+                })
+
+                if (!response.ok) {
+                  const errorData = await response.json()
+                  throw new Error(errorData.error || 'Failed to upload file')
+                }
+
+                const data = await response.json()
+                
+                // Redirect to recording detail page
+                window.location.href = `/record/${data.recordingId}`
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Failed to upload file')
+                setIsUploading(false)
+              }
+            }}
+          />
+        </label>
         {isUploading && (
           <p className="text-sm text-muted-foreground mt-2">Uploading...</p>
         )}

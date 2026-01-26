@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       .eq('owner_id', userId)
       .order('created_at', { ascending: true })
       .limit(1)
-      .single()
+      .single() as { data: { id: string } | null; error: unknown }
 
     // If no workspace exists, create one (fallback for users created before trigger)
     // Use service client to bypass RLS for admin operations

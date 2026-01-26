@@ -5,23 +5,78 @@ import { createClient } from '@/utils/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui/logo'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 import { WorkspaceSelector } from '@/components/workspace/workspace-selector'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { WritePostModal } from '@/components/features/write-post/write-post-modal'
+import { AiAssistantModal } from '@/components/features/ai-assistant/ai-assistant-modal'
+import { UserProfileDropdown } from '@/components/features/user-profile/user-profile-dropdown'
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  PenLine, 
+  Sparkles,
+  LayoutDashboard,
+  Settings,
+  BarChart3,
+  Mic,
+  FileEdit,
+  LayoutGrid,
+  MessageSquare,
+  Kanban,
+  CalendarDays,
+  TrendingUp,
+  Users,
+  FolderOpen
+} from 'lucide-react'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-  { name: 'Record', href: '/record', icon: '🎤' },
-  { name: 'Repurpose', href: '/repurpose', icon: '♻️', enabled: true },
-  { name: 'Drafts', href: '/drafts', icon: '📝', enabled: true },
-  { name: 'Carousels', href: '/carousels', icon: '🎠', enabled: true },
-  { name: 'Calendar', href: '/calendar', icon: '📅', enabled: true },
-  { name: 'Analytics', href: '/analytics', icon: '📈', enabled: false },
-  { name: 'Settings', href: '/settings', icon: '⚙️', enabled: true },
+interface NavItem {
+  name: string
+  href: string
+  icon: React.ReactNode
+  badge?: string
+  enabled?: boolean
+  hidden?: boolean
+}
+
+interface NavSection {
+  title?: string
+  items: NavItem[]
+}
+
+const navigationSections: NavSection[] = [
+  {
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+      { name: 'Settings', href: '/settings', icon: <Settings className="w-5 h-5" /> },
+      { name: 'Analytics', href: '/analytics', icon: <BarChart3 className="w-5 h-5" />, enabled: false },
+    ]
+  },
+  {
+    title: 'Content Creation',
+    items: [
+      { name: 'Voice Notes', href: '/record', icon: <Mic className="w-5 h-5" />, badge: 'BETA' },
+      { name: 'Post Generator', href: '/repurpose', icon: <FileEdit className="w-5 h-5" /> },
+      { name: 'Carousel Maker', href: '/carousels', icon: <LayoutGrid className="w-5 h-5" /> },
+    ]
+  },
+  {
+    title: 'Drafts & Scheduling',
+    items: [
+      { name: 'Drafts', href: '/drafts', icon: <Kanban className="w-5 h-5" /> },
+      { name: 'Calendar', href: '/calendar', icon: <CalendarDays className="w-5 h-5" /> },
+    ]
+  },
+  {
+    title: 'Content Inspiration',
+    items: [
+      { name: 'Viral Posts', href: '/inspiration/viral', icon: <TrendingUp className="w-5 h-5" />, enabled: false },
+      { name: 'Influencers', href: '/inspiration/influencers', icon: <Users className="w-5 h-5" />, enabled: false },
+      { name: 'Swipe Files', href: '/inspiration/swipe', icon: <FolderOpen className="w-5 h-5" />, enabled: false },
+    ]
+  },
 ]
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -29,6 +84,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [loading, setLoading] = useState(true)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [showWritePostModal, setShowWritePostModal] = useState(false)
+  const [showAiAssistant, setShowAiAssistant] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -126,45 +183,96 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
         </Link>
 
+        {/* Write Post Button */}
+        <div className="p-3">
+          <button
+            onClick={() => setShowWritePostModal(true)}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200 transition-all ${
+              sidebarCollapsed ? 'px-3' : ''
+            }`}
+            title={sidebarCollapsed ? 'Write Post' : undefined}
+          >
+            <PenLine className="w-5 h-5" />
+            {!sidebarCollapsed && <span>Write Post</span>}
+          </button>
+        </div>
+
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-            const isEnabled = item.enabled !== false
-            
-            if (!isEnabled) {
-              return (
-                <div
-                  key={item.name}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-lg text-gray-400 cursor-not-allowed opacity-60 ${
-                    sidebarCollapsed ? 'justify-center' : ''
-                  }`}
-                  title={sidebarCollapsed ? item.name + ' (Coming soon)' : 'Coming soon'}
-                >
-                  <span className="text-xl flex-shrink-0">{item.icon}</span>
-                  {!sidebarCollapsed && <span>{item.name}</span>}
+          {navigationSections.map((section, sectionIndex) => (
+            <div key={sectionIndex} className={sectionIndex > 0 ? 'mt-6' : ''}>
+              {/* Section Title */}
+              {section.title && !sidebarCollapsed && (
+                <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  {section.title}
                 </div>
-              )
-            }
-            
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
-                  sidebarCollapsed ? 'justify-center' : ''
-                } ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-                title={sidebarCollapsed ? item.name : undefined}
-              >
-                <span className="text-xl flex-shrink-0">{item.icon}</span>
-                {!sidebarCollapsed && <span>{item.name}</span>}
-              </Link>
-            )
-          })}
+              )}
+              {section.title && sidebarCollapsed && (
+                <div className="my-2 mx-3 border-t border-gray-200" />
+              )}
+              
+              {/* Section Items */}
+              <div className="space-y-1">
+                {section.items.filter(item => !item.hidden).map((item) => {
+                  const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+                  const isEnabled = item.enabled !== false
+                  
+                  if (!isEnabled) {
+                    return (
+                      <div
+                        key={item.name}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 cursor-not-allowed opacity-60 ${
+                          sidebarCollapsed ? 'justify-center' : ''
+                        }`}
+                        title={sidebarCollapsed ? item.name + ' (Coming soon)' : 'Coming soon'}
+                      >
+                        <span className="flex-shrink-0 text-gray-400">{item.icon}</span>
+                        {!sidebarCollapsed && (
+                          <>
+                            <span className="flex-1">{item.name}</span>
+                            {item.badge && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-gray-200 text-gray-500 rounded">
+                                {item.badge}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )
+                  }
+                  
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                        sidebarCollapsed ? 'justify-center' : ''
+                      } ${
+                        isActive
+                          ? 'bg-orange-50 text-orange-600 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title={sidebarCollapsed ? item.name : undefined}
+                    >
+                      <span className={`flex-shrink-0 ${isActive ? 'text-orange-500' : 'text-gray-500'}`}>
+                        {item.icon}
+                      </span>
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="flex-1">{item.name}</span>
+                          {item.badge && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-orange-100 text-orange-600 rounded">
+                              {item.badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Collapse toggle button */}
@@ -179,32 +287,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <ChevronLeft className="w-4 h-4" />
           )}
         </button>
-
-        {/* User Section */}
-        <div className="p-3 border-t border-gray-200">
-          <div className={`flex items-center gap-3 mb-3 px-2 py-2 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-              {user.email?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-900 truncate">
-                  {user.user_metadata?.name || user.email}
-                </div>
-                <div className="text-xs text-gray-500 truncate">{user.email}</div>
-              </div>
-            )}
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="ghost"
-            className={`w-full text-gray-700 hover:bg-gray-100 ${sidebarCollapsed ? 'justify-center px-2' : 'justify-start'}`}
-            title={sidebarCollapsed ? 'Log out' : undefined}
-          >
-            <span className={sidebarCollapsed ? '' : 'mr-2'}>🚪</span>
-            {!sidebarCollapsed && 'Log out'}
-          </Button>
-        </div>
       </aside>
 
       {/* Main Content */}
@@ -214,9 +296,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="px-6 py-4">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold text-gray-900">
-                {navigation.find((item) => pathname === item.href || pathname?.startsWith(item.href + '/'))?.name || 'Dashboard'}
+                {navigationSections.flatMap(s => s.items).find((item) => pathname === item.href || pathname?.startsWith(item.href + '/'))?.name || 'Dashboard'}
               </h1>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 {/* Workspace Selector */}
                 {selectedWorkspaceId && (
                   <WorkspaceSelector
@@ -224,6 +306,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     onWorkspaceChange={setSelectedWorkspaceId}
                   />
                 )}
+
+                {/* AI Assistant Button */}
+                <button
+                  onClick={() => setShowAiAssistant(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  AI Assistant
+                </button>
+
+                {/* User Profile Dropdown */}
+                <UserProfileDropdown user={user} onLogout={handleLogout} />
               </div>
             </div>
           </div>
@@ -232,6 +326,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Page Content */}
         <main className="p-6">{children}</main>
       </div>
+
+      {/* Write Post Modal */}
+      <WritePostModal 
+        isOpen={showWritePostModal} 
+        onClose={() => setShowWritePostModal(false)} 
+      />
+
+      {/* AI Assistant Modal */}
+      <AiAssistantModal
+        isOpen={showAiAssistant}
+        onClose={() => setShowAiAssistant(false)}
+      />
     </div>
   )
 }

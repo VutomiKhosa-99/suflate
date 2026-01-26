@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { signInWithLinkedIn } from '@/lib/auth/linkedin'
 import { signInWithGoogle } from '@/lib/auth/google'
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -31,7 +31,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const redirectTo = searchParams.get('redirect') || '/dashboard'
+      const redirectTo = searchParams?.get('redirect') || '/dashboard'
       const supabase = createClient()
 
       // Sign in directly with client-side Supabase
@@ -53,7 +53,7 @@ export default function LoginPage() {
 
       // Sync session to cookies for SSR middleware
       try {
-        await fetch('/api/auth/session', {
+        const res = await fetch('/api/auth/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include', // Important: include cookies in request/response
@@ -62,6 +62,11 @@ export default function LoginPage() {
             refresh_token: data.session.refresh_token,
           }),
         })
+        
+        if (res.ok) {
+          // Wait for browser to process Set-Cookie headers
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
       } catch (e) {
         console.error('Failed to sync session to cookies:', e)
       }
@@ -273,5 +278,17 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }

@@ -977,7 +977,7 @@ export default function CarouselEditorPage() {
               </div>
 
               <div className="text-xs text-gray-500">
-                You'll receive an email notification when it's time to post your carousel to LinkedIn.
+                You&apos;ll receive an email notification when it&apos;s time to post your carousel to LinkedIn.
               </div>
 
               <div className="flex gap-2 pt-2">

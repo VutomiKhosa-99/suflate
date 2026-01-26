@@ -52,3 +52,80 @@ export async function GET(
     )
   }
 }
+
+/**
+ * DELETE /api/suflate/voice/[id]
+ * Delete a voice recording and all related data
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    
+    // Authentication check
+    const { user, error: authError } = await getAuthUser(request)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Use service client to bypass RLS
+    const serviceClient = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    // First verify the user owns this recording
+    const { data: recording, error: fetchError } = await serviceClient
+      .from('voice_recordings')
+      .select('id, storage_path')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (fetchError || !recording) {
+      return NextResponse.json(
+        { error: 'Recording not found' },
+        { status: 404 }
+      )
+    }
+
+    // Delete related transcriptions first (cascades to posts)
+    await serviceClient
+      .from('transcriptions')
+      .delete()
+      .eq('recording_id', id)
+
+    // Delete the voice recording
+    const { error: deleteError } = await serviceClient
+      .from('voice_recordings')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) {
+      console.error('Error deleting recording:', deleteError)
+      return NextResponse.json(
+        { error: 'Failed to delete recording' },
+        { status: 500 }
+      )
+    }
+
+    // Delete from storage if exists
+    if (recording.storage_path) {
+      await serviceClient.storage
+        .from('voice-recordings')
+        .remove([recording.storage_path])
+    }
+
+    return NextResponse.json({ success: true, deleted: true })
+  } catch (error) {
+    console.error('Error deleting recording:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

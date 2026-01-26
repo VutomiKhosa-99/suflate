@@ -6,8 +6,7 @@ const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+
 
 /**
  * POST /api/auth/session
- * Syncs a session from client (localStorage) to server (cookies)
- * This is needed when using @supabase/supabase-js on client with @supabase/ssr on server
+ * Manually sets auth cookies for SSR middleware
  */
 export async function POST(request: NextRequest) {
   try {
@@ -17,47 +16,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing access_token' }, { status: 400 })
     }
 
-    // Verify the token is valid by decoding it (basic check)
-    let payload
+    // Decode token to get user info for logging
+    let userEmail = 'unknown'
     try {
       const parts = access_token.split('.')
-      payload = JSON.parse(Buffer.from(parts[1], 'base64').toString())
-    } catch (e) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 400 })
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString())
+      userEmail = payload.email || 'unknown'
+    } catch {
+      // Ignore decode errors
     }
 
-    // Create the session object that Supabase expects in cookies
-    const sessionData = {
+    // Create the session object that Supabase SSR expects
+    const sessionData = JSON.stringify({
       access_token,
       refresh_token: refresh_token || '',
-      token_type: 'bearer',
-      expires_in: payload.exp ? payload.exp - Math.floor(Date.now() / 1000) : 3600,
-      expires_at: payload.exp || Math.floor(Date.now() / 1000) + 3600,
-      user: {
-        id: payload.sub,
-        email: payload.email,
-        app_metadata: payload.app_metadata || {},
-        user_metadata: payload.user_metadata || {},
-        aud: payload.aud,
-        created_at: '',
-      },
-    }
-
-    // Serialize the session data
-    const sessionJson = JSON.stringify(sessionData)
-    
-    // Split into chunks if necessary (Supabase uses chunked cookies for large sessions)
-    const chunkSize = 3180 // Safe size for cookies
-    const chunks: string[] = []
-    
-    for (let i = 0; i < sessionJson.length; i += chunkSize) {
-      chunks.push(sessionJson.slice(i, i + chunkSize))
-    }
+    })
 
     // Create response
     const response = NextResponse.json({ success: true })
     
-    // Cookie options
+    // Cookie options matching Supabase SSR defaults
     const cookieOptions = {
       path: '/',
       sameSite: 'lax' as const,
@@ -66,23 +44,32 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 7, // 7 days
     }
 
-    // Set chunked cookies
+    // Set the auth token cookie
     const cookieName = `sb-${projectRef}-auth-token`
     
-    if (chunks.length === 1) {
-      response.cookies.set(cookieName, chunks[0], cookieOptions)
+    // Supabase SSR uses base64 encoding for the cookie value
+    const encodedValue = `base64-${Buffer.from(sessionData).toString('base64')}`
+    
+    // Check if we need to chunk (cookies have ~4KB limit)
+    const chunkSize = 3500
+    if (encodedValue.length <= chunkSize) {
+      response.cookies.set(cookieName, encodedValue, cookieOptions)
+      console.log('[Session API] Session synced for:', userEmail, '| Cookie:', cookieName)
     } else {
+      // Split into chunks
+      const chunks = []
+      for (let i = 0; i < encodedValue.length; i += chunkSize) {
+        chunks.push(encodedValue.slice(i, i + chunkSize))
+      }
       chunks.forEach((chunk, index) => {
         response.cookies.set(`${cookieName}.${index}`, chunk, cookieOptions)
       })
+      console.log('[Session API] Session synced for:', userEmail, '| Chunks:', chunks.length)
     }
-
-    console.log('[Session API] Session synced to cookies for:', payload.email)
-    console.log('[Session API] Cookie chunks:', chunks.length)
     
     return response
   } catch (e) {
-    console.error('[Session API] Exception:', e)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[Session API] Error:', e)
+    return NextResponse.json({ error: 'Failed to sync session' }, { status: 500 })
   }
 }

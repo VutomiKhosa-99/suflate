@@ -82,6 +82,10 @@ export async function GET(request: NextRequest) {
 
     // Get LinkedIn profile info using OpenID Connect userinfo endpoint
     let linkedinProfileId = null
+    let linkedinHeadline = null
+    let linkedinName = null
+    let linkedinPicture = null
+    
     try {
       const profileResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: {
@@ -92,13 +96,111 @@ export async function GET(request: NextRequest) {
       if (profileResponse.ok) {
         const profileData = await profileResponse.json()
         linkedinProfileId = profileData.sub // LinkedIn member ID from OIDC
+        linkedinName = profileData.name
+        linkedinPicture = profileData.picture
         console.log('[LinkedIn Callback] Profile ID:', linkedinProfileId, 'Name:', profileData.name)
+        console.log('[LinkedIn Callback] Full userinfo response:', JSON.stringify(profileData))
       } else {
         const errorText = await profileResponse.text()
         console.log('[LinkedIn Callback] Userinfo failed:', profileResponse.status, errorText)
       }
     } catch (e) {
       console.log('[LinkedIn Callback] Profile fetch error:', e)
+    }
+
+    // Try multiple methods to get headline
+    // Method 1: REST API with LinkedIn-Version header (for r_profile_basicinfo scope)
+    try {
+      const restResponse = await fetch(
+        'https://api.linkedin.com/rest/me?fields=id,firstName,lastName,headline,vanityName,profilePicture',
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'LinkedIn-Version': '202401',
+            'X-Restli-Protocol-Version': '2.0.0',
+          },
+        }
+      )
+
+      console.log('[LinkedIn Callback] REST /me response status:', restResponse.status)
+      
+      if (restResponse.ok) {
+        const restData = await restResponse.json()
+        console.log('[LinkedIn Callback] REST /me response:', JSON.stringify(restData))
+        // REST API returns headline directly or as localized object
+        if (restData.headline) {
+          linkedinHeadline = typeof restData.headline === 'string' 
+            ? restData.headline 
+            : restData.headline.localized?.en_US || restData.headline.preferredLocale?.value || null
+        }
+        if (linkedinHeadline) {
+          console.log('[LinkedIn Callback] Got headline from REST /me:', linkedinHeadline)
+        }
+      } else {
+        const errorText = await restResponse.text()
+        console.log('[LinkedIn Callback] REST /me failed:', restResponse.status, errorText)
+      }
+    } catch (e) {
+      console.log('[LinkedIn Callback] REST /me error:', e)
+    }
+
+    // Method 2: /v2/me with localizedHeadline projection (legacy)
+    if (!linkedinHeadline) {
+      try {
+        const meResponse = await fetch(
+          'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,localizedHeadline,vanityName)',
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'X-Restli-Protocol-Version': '2.0.0',
+            },
+          }
+        )
+
+        console.log('[LinkedIn Callback] /v2/me response status:', meResponse.status)
+        
+        if (meResponse.ok) {
+          const meData = await meResponse.json()
+          console.log('[LinkedIn Callback] /v2/me response:', JSON.stringify(meData))
+          linkedinHeadline = meData.localizedHeadline || null
+          if (linkedinHeadline) {
+            console.log('[LinkedIn Callback] Got headline from /v2/me:', linkedinHeadline)
+          }
+        } else {
+          const errorText = await meResponse.text()
+          console.log('[LinkedIn Callback] /v2/me failed:', meResponse.status, errorText)
+        }
+      } catch (e) {
+        console.log('[LinkedIn Callback] /v2/me error:', e)
+      }
+    }
+
+    // Method 3: Try with headline projection only if still not found
+    if (!linkedinHeadline) {
+      try {
+        const liteResponse = await fetch(
+          'https://api.linkedin.com/v2/me?projection=(headline)',
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'X-Restli-Protocol-Version': '2.0.0',
+            },
+          }
+        )
+        
+        if (liteResponse.ok) {
+          const liteData = await liteResponse.json()
+          console.log('[LinkedIn Callback] Headline projection response:', JSON.stringify(liteData))
+          // Headline might be nested in different formats
+          if (liteData.headline) {
+            linkedinHeadline = typeof liteData.headline === 'string' 
+              ? liteData.headline 
+              : liteData.headline.localized?.en_US || liteData.headline.preferredLocale || null
+          }
+        }
+      } catch (e) {
+        console.log('[LinkedIn Callback] Headline projection error:', e)
+      }
     }
 
     // Store token in database using service role
@@ -108,13 +210,33 @@ export async function GET(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    const updateData: Record<string, string | null> = {
+      linkedin_access_token: accessToken,
+      linkedin_profile_id: linkedinProfileId,
+      updated_at: new Date().toISOString(),
+    }
+    
+    // Only update headline if we got one
+    if (linkedinHeadline) {
+      updateData.linkedin_headline = linkedinHeadline
+    }
+    
+    // Update name if not already set
+    if (linkedinName) {
+      const { data: existingUser } = await serviceClient
+        .from('users')
+        .select('name')
+        .eq('id', userId)
+        .single()
+      
+      if (!existingUser?.name) {
+        updateData.name = linkedinName
+      }
+    }
+
     const { error: updateError } = await serviceClient
       .from('users')
-      .update({
-        linkedin_access_token: accessToken,
-        linkedin_profile_id: linkedinProfileId,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', userId)
 
     if (updateError) {
@@ -122,7 +244,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?error=linkedin_storage_failed', request.url))
     }
 
-    console.log('[LinkedIn Callback] LinkedIn connected successfully for user:', userId)
+    console.log('[LinkedIn Callback] LinkedIn connected successfully for user:', userId, 'headline:', linkedinHeadline || 'NOT FOUND')
+    
+    // Redirect to settings if headline wasn't obtained so user can enter it manually
+    if (!linkedinHeadline) {
+      return NextResponse.redirect(new URL('/settings?linkedin=connected&needs_headline=true', request.url))
+    }
     
     return NextResponse.redirect(new URL('/dashboard?linkedin=connected', request.url))
   } catch (e) {

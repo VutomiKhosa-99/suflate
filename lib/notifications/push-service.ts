@@ -36,6 +36,7 @@ export async function sendPushNotification(
 ): Promise<{ success: boolean; error?: string }> {
   // Dynamic import web-push (server-side only)
   try {
+    // @ts-ignore - web-push is an optional dependency
     const webpush = await import('web-push')
     
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY

@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .from('posts')
       .select('id, workspace_id')
       .eq('id', id)
-      .single()
+      .single() as { data: { id: string; workspace_id: string } | null; error: unknown }
 
     if (postError || !post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .update({
         workspace_id: targetWorkspaceId,
         updated_at: new Date().toISOString(),
-      })
+      } as never)
       .eq('id', id)
       .select()
       .single()

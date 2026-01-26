@@ -4,7 +4,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { MoveToWorkspaceDialog } from './move-to-workspace-dialog'
 import {
   Mic,
@@ -13,26 +12,27 @@ import {
   MoreVertical,
   Edit,
   Trash2,
-  Tag,
   Copy,
   Check,
   FolderInput,
+  Sparkles,
 } from 'lucide-react'
 
-// Variation type labels and colors
-const VARIATION_LABELS: Record<string, { label: string; color: string }> = {
-  professional: { label: 'Professional', color: 'bg-blue-100 text-blue-800' },
-  personal: { label: 'Personal', color: 'bg-purple-100 text-purple-800' },
-  actionable: { label: 'Actionable', color: 'bg-green-100 text-green-800' },
-  discussion: { label: 'Discussion', color: 'bg-yellow-100 text-yellow-800' },
-  bold: { label: 'Bold', color: 'bg-red-100 text-red-800' },
+// Variation type labels and colors - Updated to match Supergrow style
+const VARIATION_LABELS: Record<string, { label: string; bgColor: string; textColor: string }> = {
+  professional: { label: 'Professional', bgColor: 'bg-blue-50', textColor: 'text-blue-600' },
+  personal: { label: 'Personal', bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
+  actionable: { label: 'Actionable', bgColor: 'bg-green-50', textColor: 'text-green-600' },
+  discussion: { label: 'Discussion', bgColor: 'bg-yellow-50', textColor: 'text-yellow-700' },
+  bold: { label: 'Bold', bgColor: 'bg-red-50', textColor: 'text-red-600' },
 }
 
 // Source type icons
-const SOURCE_ICONS: Record<string, React.ReactNode> = {
-  voice: <Mic className="w-4 h-4" />,
-  repurpose_blog: <FileText className="w-4 h-4" />,
-  repurpose_tweet: <Twitter className="w-4 h-4" />,
+const SOURCE_ICONS: Record<string, { icon: React.ReactNode; bgColor: string }> = {
+  voice: { icon: <Mic className="w-4 h-4 text-orange-600" />, bgColor: 'bg-orange-100' },
+  repurpose_blog: { icon: <FileText className="w-4 h-4 text-blue-600" />, bgColor: 'bg-blue-100' },
+  repurpose_tweet: { icon: <Twitter className="w-4 h-4 text-sky-600" />, bgColor: 'bg-sky-100' },
+  manual: { icon: <Sparkles className="w-4 h-4 text-purple-600" />, bgColor: 'bg-purple-100' },
 }
 
 export interface Draft {
@@ -71,15 +71,19 @@ export function DraftCard({ draft, onDelete, onTagClick, onMove, showMoveOption 
   const [showMoveDialog, setShowMoveDialog] = useState(false)
 
   const variationInfo = VARIATION_LABELS[draft.variation_type] || {
-    label: draft.variation_type,
-    color: 'bg-gray-100 text-gray-800',
+    label: draft.variation_type || 'Draft',
+    bgColor: 'bg-gray-50',
+    textColor: 'text-gray-600',
   }
 
-  const sourceIcon = SOURCE_ICONS[draft.source_type] || <FileText className="w-4 h-4" />
+  const sourceInfo = SOURCE_ICONS[draft.source_type] || { 
+    icon: <FileText className="w-4 h-4 text-gray-600" />, 
+    bgColor: 'bg-gray-100' 
+  }
 
-  // Get preview text (first 150 characters)
-  const previewText = draft.content.length > 150
-    ? draft.content.slice(0, 150).trim() + '...'
+  // Get preview text (first 120 characters for cleaner look)
+  const previewText = draft.content.length > 120
+    ? draft.content.slice(0, 120).trim() + '...'
     : draft.content
 
   // Format relative time
@@ -113,24 +117,24 @@ export function DraftCard({ draft, onDelete, onTagClick, onMove, showMoveOption 
   }
 
   return (
-    <Card className="p-4 hover:shadow-md transition-shadow relative">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 hover:border-orange-200 hover:shadow-sm transition-all relative group">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          {/* Source indicator (Story 3.2) */}
+        <div className="flex items-center gap-3">
+          {/* Source indicator */}
           <div
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600"
+            className={`w-9 h-9 rounded-lg ${sourceInfo.bgColor} flex items-center justify-center flex-shrink-0`}
             title={`Source: ${draft.source_type}`}
           >
-            {sourceIcon}
+            {sourceInfo.icon}
           </div>
           <div>
             {/* Variation type badge */}
-            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${variationInfo.color}`}>
+            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${variationInfo.bgColor} ${variationInfo.textColor}`}>
               {variationInfo.label}
             </span>
-            {/* Creation date (Story 3.7) */}
-            <p className="text-xs text-gray-500 mt-0.5" title={new Date(draft.created_at).toLocaleString()}>
+            {/* Creation date */}
+            <p className="text-xs text-gray-400 mt-1" title={new Date(draft.created_at).toLocaleString()}>
               {timeAgo}
             </p>
           </div>
@@ -138,14 +142,12 @@ export function DraftCard({ draft, onDelete, onTagClick, onMove, showMoveOption 
 
         {/* Actions menu */}
         <div className="relative">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-8 h-8 p-0"
+          <button
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
             onClick={() => setShowMenu(!showMenu)}
           >
-            <MoreVertical className="w-4 h-4" />
-          </Button>
+            <MoreVertical className="w-4 h-4 text-gray-400" />
+          </button>
 
           {showMenu && (
             <>
@@ -153,17 +155,17 @@ export function DraftCard({ draft, onDelete, onTagClick, onMove, showMoveOption 
                 className="fixed inset-0 z-10"
                 onClick={() => setShowMenu(false)}
               />
-              <div className="absolute right-0 top-8 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+              <div className="absolute right-0 top-8 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-20">
                 <Link
                   href={`/editor/${draft.id}`}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   <Edit className="w-4 h-4" />
                   Edit
                 </Link>
                 <button
                   onClick={handleCopy}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                   {copied ? 'Copied!' : 'Copy content'}
@@ -171,17 +173,17 @@ export function DraftCard({ draft, onDelete, onTagClick, onMove, showMoveOption 
                 {showMoveOption && onMove && (
                   <button
                     onClick={openMoveDialog}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <FolderInput className="w-4 h-4" />
                     Move to workspace
                   </button>
                 )}
-                <hr className="my-1" />
+                <hr className="my-2 border-gray-100" />
                 <button
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                   {isDeleting ? 'Deleting...' : 'Delete'}
@@ -193,45 +195,20 @@ export function DraftCard({ draft, onDelete, onTagClick, onMove, showMoveOption 
       </div>
 
       {/* Content preview */}
-      <Link href={`/editor/${draft.id}`} className="block group">
-        {draft.title && (
-          <h3 className="font-medium text-gray-900 mb-1 group-hover:text-blue-600">
-            {draft.title}
-          </h3>
-        )}
-        <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+      <Link href={`/editor/${draft.id}`} className="block">
+        <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
           {previewText}
         </p>
       </Link>
 
-      {/* Footer with tags and stats */}
-      <div className="mt-4 flex items-center justify-between">
-        {/* Tags (Story 3.6) */}
-        <div className="flex flex-wrap gap-1">
-          {draft.tags?.slice(0, 3).map((tag) => (
-            <button
-              key={tag}
-              onClick={() => onTagClick?.(tag)}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 rounded text-xs text-gray-600 transition-colors"
-            >
-              <Tag className="w-3 h-3" />
-              {tag}
-            </button>
-          ))}
-          {draft.tags && draft.tags.length > 3 && (
-            <span className="text-xs text-gray-400">
-              +{draft.tags.length - 3} more
-            </span>
-          )}
-        </div>
-
-        {/* Word count */}
+      {/* Footer with word count */}
+      <div className="mt-4 flex items-center justify-end">
         <span className="text-xs text-gray-400">
           {draft.word_count || 0} words
         </span>
       </div>
 
-      {/* Move to workspace dialog (Story 3.8) */}
+      {/* Move to workspace dialog */}
       {showMoveOption && onMove && (
         <MoveToWorkspaceDialog
           isOpen={showMoveDialog}
@@ -241,6 +218,6 @@ export function DraftCard({ draft, onDelete, onTagClick, onMove, showMoveOption 
           onClose={() => setShowMoveDialog(false)}
         />
       )}
-    </Card>
+    </div>
   )
 }
