@@ -27,12 +27,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard?error=linkedin_invalid_callback', request.url))
   }
 
-  // Decode state to get user ID
+  // Decode state to get user ID and optional workspaceId
   let userId: string
+  let workspaceId: string | null = null
   try {
     const stateData = JSON.parse(Buffer.from(state, 'base64').toString())
     userId = stateData.userId
-    
+    workspaceId = stateData.workspaceId || null
+
     // Check state is not too old (5 minutes)
     if (Date.now() - stateData.timestamp > 5 * 60 * 1000) {
       console.error('[LinkedIn Callback] State expired')
@@ -203,54 +205,68 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Store token in database using service role
+    // Store token in the new workspace_linkedin_accounts table using service role
     const serviceClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const updateData: Record<string, string | null> = {
-      linkedin_access_token: accessToken,
-      linkedin_profile_id: linkedinProfileId,
-      updated_at: new Date().toISOString(),
+    // If workspaceId not provided in state, attempt to find a default workspace for the user
+    if (!workspaceId) {
+      const { data: memberships } = await serviceClient
+        .from('workspace_members')
+        .select('workspace_id')
+        .eq('user_id', userId)
+        .limit(1)
+      workspaceId = memberships?.[0]?.workspace_id || null
     }
-    
-    // Only update headline if we got one
-    if (linkedinHeadline) {
-      updateData.linkedin_headline = linkedinHeadline
+
+    if (!workspaceId) {
+      console.error('[LinkedIn Callback] No workspace available to attach LinkedIn account')
+      return NextResponse.redirect(new URL('/dashboard?error=linkedin_no_workspace', request.url))
     }
-    
-    // Update name if not already set
-    if (linkedinName) {
-      const { data: existingUser } = await serviceClient
-        .from('users')
-        .select('name')
-        .eq('id', userId)
-        .single()
-      
-      if (!existingUser?.name) {
-        updateData.name = linkedinName
+
+    // Prevent the same LinkedIn profile being linked to another workspace
+    if (linkedinProfileId) {
+      const { data: existing } = await serviceClient
+        .from('workspace_linkedin_accounts')
+        .select('workspace_id')
+        .eq('linkedin_profile_id', linkedinProfileId)
+        .limit(1)
+
+      if (existing && existing.length > 0 && existing[0].workspace_id !== workspaceId) {
+        console.error('[LinkedIn Callback] LinkedIn profile already linked to another workspace')
+        return NextResponse.redirect(new URL('/dashboard?error=linkedin_already_linked', request.url))
       }
     }
 
-    const { error: updateError } = await serviceClient
-      .from('users')
-      .update(updateData)
-      .eq('id', userId)
+    // Upsert into workspace_linkedin_accounts
+    const upsertPayload: Record<string, any> = {
+      workspace_id: workspaceId,
+      linkedin_profile_id: linkedinProfileId,
+      linkedin_access_token: accessToken,
+      updated_at: new Date().toISOString(),
+    }
 
-    if (updateError) {
-      console.error('[LinkedIn Callback] Failed to store token:', updateError)
+    if (linkedinHeadline) upsertPayload.linkedin_headline = linkedinHeadline
+
+    const { error: upsertError } = await serviceClient
+      .from('workspace_linkedin_accounts')
+      .upsert(upsertPayload, { onConflict: 'workspace_id' })
+
+    if (upsertError) {
+      console.error('[LinkedIn Callback] Failed to store workspace LinkedIn account:', upsertError)
       return NextResponse.redirect(new URL('/dashboard?error=linkedin_storage_failed', request.url))
     }
 
-    console.log('[LinkedIn Callback] LinkedIn connected successfully for user:', userId, 'headline:', linkedinHeadline || 'NOT FOUND')
-    
+    console.log('[LinkedIn Callback] LinkedIn connected to workspace:', workspaceId, 'profile:', linkedinProfileId)
+
     // Redirect to settings if headline wasn't obtained so user can enter it manually
     if (!linkedinHeadline) {
       return NextResponse.redirect(new URL('/settings?linkedin=connected&needs_headline=true', request.url))
     }
-    
+
     return NextResponse.redirect(new URL('/dashboard?linkedin=connected', request.url))
   } catch (e) {
     console.error('[LinkedIn Callback] Exception:', e)

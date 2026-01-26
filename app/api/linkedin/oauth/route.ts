@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getAuthUser } from '@/utils/supabase/auth-helper'
+import { createClient } from '@supabase/supabase-js'
 
 /**
  * GET /api/linkedin/oauth
@@ -35,9 +36,39 @@ export async function GET(request: NextRequest) {
   // - r_profile_basicinfo: Basic profile info (name, headline, photo, profile URL)
   const scopes = 'openid profile email w_member_social r_profile_basicinfo'
 
-  // Generate state for CSRF protection (store user ID for callback)
+  // Generate state for CSRF protection (store user ID and selected workspace for callback)
+  // Try to include the currently-selected workspace from cookies so callback can attach the LinkedIn
+  // account to the correct workspace.
+  const selectedWorkspace = request.cookies.get('selected_workspace_id')?.value || null
+
+  // Prevent starting OAuth if workspace already has a linked LinkedIn profile
+  try {
+    if (selectedWorkspace) {
+      const serviceClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      )
+
+      const { data: existing } = await serviceClient
+        .from('workspace_linkedin_accounts')
+        .select('linkedin_profile_id')
+        .eq('workspace_id', selectedWorkspace)
+        .limit(1)
+
+      if (existing && existing.length > 0 && existing[0].linkedin_profile_id) {
+        // Workspace already has a LinkedIn profile linked - instruct user to disconnect first
+        return NextResponse.redirect(new URL('/settings?error=linkedin_already_connected', request.url))
+      }
+    }
+  } catch (e) {
+    console.error('[LinkedIn OAuth] Error checking existing workspace account:', e)
+    // Fall through and allow OAuth flow if check fails
+  }
+
   const state = Buffer.from(JSON.stringify({
     userId: user.id,
+    workspaceId: selectedWorkspace,
     timestamp: Date.now(),
   })).toString('base64')
 

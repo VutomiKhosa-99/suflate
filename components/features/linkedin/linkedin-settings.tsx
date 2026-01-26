@@ -23,19 +23,10 @@ export function LinkedInSettings({ userId }: LinkedInSettingsProps) {
 
   const checkConnection = async () => {
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('users')
-        .select('linkedin_profile_id, linkedin_headline')
-        .eq('id', userId)
-        .single() as { data: { linkedin_profile_id?: string; linkedin_headline?: string } | null; error: unknown }
-
-      if (!error && data?.linkedin_profile_id) {
-        setIsConnected(true)
-      }
-      if (data?.linkedin_headline) {
-        setHeadline(data.linkedin_headline)
-      }
+      const res = await fetch('/api/linkedin/status')
+      const json = await res.json()
+      if (json?.connected) setIsConnected(true)
+      if (json?.profileId && !headline) setHeadline(json.headline || '')
     } catch (e) {
       console.error('Failed to check LinkedIn connection:', e)
     } finally {
@@ -51,16 +42,8 @@ export function LinkedInSettings({ userId }: LinkedInSettingsProps) {
   const handleDisconnect = async () => {
     setDisconnecting(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('users')
-        .update({
-          linkedin_access_token: null,
-          linkedin_profile_id: null,
-        } as never)
-        .eq('id', userId)
-
-      if (error) throw error
+      const resp = await fetch('/api/linkedin/disconnect', { method: 'POST' })
+      if (!resp.ok) throw new Error('Failed to disconnect')
       setIsConnected(false)
     } catch (e) {
       console.error('Failed to disconnect LinkedIn:', e)

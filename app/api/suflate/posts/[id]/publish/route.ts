@@ -57,11 +57,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Check if user has LinkedIn connected
-    const { data: userData } = await supabase
-      .from('users')
+    // Fetch workspace-level LinkedIn account (if any)
+    const { data: accountData } = await supabase
+      .from('workspace_linkedin_accounts')
       .select('linkedin_access_token, linkedin_profile_id')
-      .eq('id', user.id)
+      .eq('workspace_id', post.workspace_id)
       .single()
 
     let linkedInPostId: string | null = null
@@ -69,12 +69,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let postedDirectly = false
 
     // Try to post directly to LinkedIn if connected
-    if (userData?.linkedin_access_token && userData?.linkedin_profile_id) {
-      console.log('[Publish Post] Attempting direct LinkedIn post...')
-      const personUrn = `urn:li:person:${userData.linkedin_profile_id}`
-      
+    if (accountData?.linkedin_access_token && accountData?.linkedin_profile_id) {
+      console.log('[Publish Post] Attempting direct LinkedIn post (workspace-level account)...')
+      const personUrn = `urn:li:person:${accountData.linkedin_profile_id}`
+
       const result = await postTextToLinkedIn(
-        userData.linkedin_access_token,
+        accountData.linkedin_access_token,
         personUrn,
         post.content,
         post.title || undefined

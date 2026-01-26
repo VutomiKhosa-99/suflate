@@ -39,33 +39,7 @@ export async function POST(
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // Get user's LinkedIn credentials
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('linkedin_access_token, linkedin_profile_id')
-      .eq('id', user.id)
-      .single()
-
-    console.log('[Publish] User lookup:', { 
-      found: !!userData, 
-      hasToken: !!userData?.linkedin_access_token,
-      hasProfileId: !!userData?.linkedin_profile_id,
-      error: userError 
-    })
-
-    if (userError || !userData) {
-      return NextResponse.json(
-        { error: 'User not found', details: userError?.message },
-        { status: 404 }
-      )
-    }
-
-    if (!userData.linkedin_access_token || !userData.linkedin_profile_id) {
-      return NextResponse.json(
-        { error: 'LinkedIn not connected. Please connect your LinkedIn account in Settings.' },
-        { status: 400 }
-      )
-    }
+    // Use workspace-scoped LinkedIn credentials
 
     // Get the carousel
     const { data: carousel, error: carouselError } = await supabase
@@ -84,10 +58,21 @@ export async function POST(
     // Generate the PDF
     const pdfBuffer = await generateCarouselPDF(carousel)
 
-    // Post to LinkedIn
-    const personUrn = `urn:li:person:${userData.linkedin_profile_id}`
+    // Fetch workspace LinkedIn credentials
+    const { data: accountData, error: accountError } = await supabase
+      .from('workspace_linkedin_accounts')
+      .select('linkedin_access_token, linkedin_profile_id')
+      .eq('workspace_id', carousel.workspace_id)
+      .single()
+
+    if (accountError || !accountData?.linkedin_access_token || !accountData?.linkedin_profile_id) {
+      return NextResponse.json({ error: 'LinkedIn not connected for this workspace' }, { status: 400 })
+    }
+
+    // Post to LinkedIn as the connected user
+    const personUrn = `urn:li:person:${accountData.linkedin_profile_id}`
     const result = await postCarouselToLinkedIn(
-      userData.linkedin_access_token,
+      accountData.linkedin_access_token,
       personUrn,
       pdfBuffer,
       title || carousel.title || 'My Carousel',
@@ -102,10 +87,8 @@ export async function POST(
           { status: 401 }
         )
       }
-      return NextResponse.json(
-        { error: result.error || 'Failed to publish to LinkedIn' },
-        { status: 500 }
-      )
+
+      return NextResponse.json({ error: result.error || 'Failed to publish to LinkedIn' }, { status: 500 })
     }
 
     // Update carousel status
@@ -119,11 +102,7 @@ export async function POST(
       })
       .eq('id', id)
 
-    return NextResponse.json({
-      success: true,
-      postId: result.postId,
-      postUrl: result.postUrl,
-    })
+    return NextResponse.json({ success: true, postId: result.postId })
   } catch (error) {
     console.error('[Publish Carousel] Error:', error)
     return NextResponse.json(

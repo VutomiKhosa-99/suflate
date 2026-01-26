@@ -22,27 +22,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Content is required' }, { status: 400 })
     }
 
-    // Get user's LinkedIn credentials
+    // Get workspace-level LinkedIn credentials based on selected workspace cookie
     const serviceClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { data: userData, error: fetchError } = await serviceClient
-      .from('users')
+    const selectedWorkspace = request.cookies.get('selected_workspace_id')?.value
+    const { data: accountData, error: fetchError } = await serviceClient
+      .from('workspace_linkedin_accounts')
       .select('linkedin_access_token, linkedin_profile_id')
-      .eq('id', user.id)
+      .eq('workspace_id', selectedWorkspace)
       .single()
 
-    if (fetchError || !userData?.linkedin_access_token) {
+    if (fetchError || !accountData?.linkedin_access_token) {
       return NextResponse.json({ 
         error: 'LinkedIn not connected. Please connect your LinkedIn account first.' 
       }, { status: 400 })
     }
 
-    const accessToken = userData.linkedin_access_token
-    const profileId = userData.linkedin_profile_id
+    const accessToken = accountData.linkedin_access_token
+    const profileId = accountData.linkedin_profile_id
 
     // Get the person URN - need to fetch it if we don't have it
     let personUrn: string

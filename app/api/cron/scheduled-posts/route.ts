@@ -111,11 +111,20 @@ export async function GET(request: NextRequest) {
           // Story 4.2: Personal profile - try to post directly, fallback to notification
           
           // Check if user has LinkedIn connected
-          const { data: userData } = await supabaseAdmin
-            .from('users')
-            .select('linkedin_access_token, linkedin_profile_id, notification_preferences, email, name')
-            .eq('id', user?.id)
-            .single()
+            // Fetch workspace-level LinkedIn account and user contact details
+            const { data: userData } = await supabaseAdmin
+              .from('workspace_linkedin_accounts')
+              .select('linkedin_access_token, linkedin_profile_id')
+              .eq('workspace_id', scheduledPost.workspace_id)
+              .limit(1)
+              .single()
+
+            // Also fetch user contact info separately
+            const { data: userContact } = await supabaseAdmin
+              .from('users')
+              .select('notification_preferences, email, name')
+              .eq('id', user?.id)
+              .single()
           
           let postedDirectly = false
           let linkedInPostId = null
@@ -168,13 +177,13 @@ export async function GET(request: NextRequest) {
             if (!scheduledPost.notification_sent) {
               const shareUrl = generateLinkedInShareUrl(post.content)
               
-              const prefs = userData?.notification_preferences || { email: true, push: false }
+              const prefs = userContact?.notification_preferences || { email: true, push: false }
               
               // Send email notification if enabled
               if (prefs.email) {
                 const emailResult = await sendScheduleNotification(
-                  userData?.email,
-                  userData?.name || 'there',
+                  userContact?.email,
+                  userContact?.name || 'there',
                   post.content,
                   shareUrl
                 )
